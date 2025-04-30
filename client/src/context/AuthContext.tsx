@@ -170,7 +170,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAuthState(prev => ({ ...prev, loading: true, error: null }));
       
       console.log('Login request data:', data);
-      const response = await authService.login(data.email, data.password) as UserData;
+      const response = await authService.login(data.email, data.password, data.role) as UserData;
       console.log('Login response data:', response);
       
       setTokens({
@@ -221,6 +221,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Redirect user based on role
   const redirectToRoleDashboard = (role: Role) => {
     switch (role) {
+      case 'superadmin':
+        navigate('/superadmin/dashboard');
+        break;
       case 'admin':
         navigate('/admin/dashboard');
         break;

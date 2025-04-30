@@ -50,8 +50,8 @@ export const signup = async (req, res) => {
 // @access  Public
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-
+    const { email, password, role } = req.body;
+    console.log(req.body);
     // Check for user email
     const user = await User.findOne({ email });
     if (!user) {
@@ -69,6 +69,11 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: 'Account is not active' });
     }
 
+    // If role is provided, validate that it matches the user's role
+    if (role && user.role !== role) {
+      return res.status(401).json({ message: 'Invalid role for this user' });
+    }
+
     res.json({
       _id: user._id,
       name: user.name,
@@ -79,6 +84,7 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     res.status(400).json({ message: error.message });
+    console.log(error.message);
   }
 };
 

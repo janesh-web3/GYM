@@ -33,6 +33,8 @@ const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
   if (user) {
     const redirectPath = (() => {
       switch(user.role) {
+        case 'superadmin':
+          return '/superadmin';
         case 'admin':
           return '/admin';
         case 'gymOwner':

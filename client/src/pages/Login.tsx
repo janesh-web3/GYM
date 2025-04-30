@@ -38,7 +38,7 @@ const Login = () => {
     }
   };
 
-  const roles: Role[] = ['gymOwner', 'member', 'trainer', 'admin'];
+  const roles: Role[] = ['superadmin', 'admin', 'gymOwner', 'member', 'trainer'];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">

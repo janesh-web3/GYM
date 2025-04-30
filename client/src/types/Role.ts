@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'gymOwner' | 'member' | 'trainer';
+export type Role = 'superadmin' | 'admin' | 'gymOwner' | 'member' | 'trainer';
 
 export interface Gym {
   id: string;

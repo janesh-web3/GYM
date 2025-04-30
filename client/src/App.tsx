@@ -120,6 +120,24 @@ const AppRoutes = () => {
           <Route path="settings" element={<Settings />} />
         </Route>
       </Route>
+
+
+      {/* Admin Routes */}
+      <Route
+        path="/superadmin"
+        element={<ProtectedRoute allowedRoles={["superadmin"]} />}
+      >
+        <Route element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="gym-management" element={<GymManagement />} />
+          <Route path="sales" element={<SalesMonitoring />} />
+          <Route path="products" element={<ProductListing />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+      </Route>
+
+
     </Routes>
   );
 };
