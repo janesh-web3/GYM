@@ -23,9 +23,15 @@ import {
 interface GymProfileProps {
   gym?: {
     id: string;
-    name: string;
+    gymName: string;
     description: string;
-    address: string;
+    address: {
+      street: string;
+      city: string;
+      state: string;
+      zipCode: string;
+      country: string;
+    };
     phone: string;
     email: string;
     website?: string;
@@ -91,9 +97,15 @@ const GymProfile = ({ gym, editable = false, onSave }: GymProfileProps) => {
   // Dummy data for preview (if no gym data is provided)
   const dummyGym = {
     id: '1',
-    name: 'Fitness Central',
+    gymName: 'Fitness Central',
     description: 'A state-of-the-art fitness facility offering a wide range of equipment and classes for all fitness levels. Our mission is to provide a welcoming environment where members can achieve their health and fitness goals.',
-    address: '123 Fitness Street, Exercise City, EC 12345',
+    address: {
+      street: '123 Fitness Street',
+      city: 'Exercise City',
+      state: 'EC',
+      zipCode: '12345',
+      country: 'USA'
+    },
     phone: '(555) 123-4567',
     email: 'info@fitnesscentral.com',
     website: 'www.fitnesscentral.com',
@@ -199,7 +211,7 @@ const GymProfile = ({ gym, editable = false, onSave }: GymProfileProps) => {
         {gymData.coverImage ? (
           <img 
             src={gymData.coverImage} 
-            alt={`${gymData.name} cover`} 
+            alt={`${gymData.gymName} cover`} 
             className="w-full h-full object-cover"
           />
         ) : (
@@ -231,7 +243,7 @@ const GymProfile = ({ gym, editable = false, onSave }: GymProfileProps) => {
           {gymData.logo ? (
             <img 
               src={gymData.logo} 
-              alt={`${gymData.name} logo`} 
+              alt={`${gymData.gymName} logo`} 
               className="w-full h-full object-cover"
             />
           ) : (
@@ -258,11 +270,11 @@ const GymProfile = ({ gym, editable = false, onSave }: GymProfileProps) => {
 
         {/* Gym Name and Quick Info */}
         <div className="md:flex-1">
-          <h1 className="text-2xl font-bold text-slate-800">{gymData.name}</h1>
+          <h1 className="text-2xl font-bold text-slate-800">{gymData.gymName}</h1>
           <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-600">
             <div className="flex items-center">
               <MapPin size={16} className="mr-1" />
-              <span>{gymData.address}</span>
+              <span>{gymData.address.street}, {gymData.address.city}, {gymData.address.state} {gymData.address.zipCode}, {gymData.address.country}</span>
             </div>
             <div className="flex items-center">
               <Phone size={16} className="mr-1" />
@@ -346,7 +358,7 @@ const GymProfile = ({ gym, editable = false, onSave }: GymProfileProps) => {
                   </li>
                   <li className="flex">
                     <MapPin size={18} className="text-emerald-600 mr-3 flex-shrink-0" />
-                    <span className="text-slate-600">{gymData.address}</span>
+                    <span className="text-slate-600">{gymData.address.street}, {gymData.address.city}, {gymData.address.state} {gymData.address.zipCode}, {gymData.address.country}</span>
                   </li>
                 </ul>
               </div>

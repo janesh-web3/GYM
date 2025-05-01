@@ -5,7 +5,6 @@ import { Role } from '../types/Role';
 import {
   // Common icons
   LayoutDashboard,
-  UserCircle,
   LogOut,
   Menu,
   X,
@@ -28,15 +27,13 @@ import {
   TrendingUp,
   
   // Member icons
-  Activity,
-  Heart,
   ShoppingBag,
-  Clock,
   
   // Trainer icons
   Clipboard,
   BarChart,
-  MessageCircle
+  MessageCircle,
+  Building
 } from 'lucide-react';
 
 // Create Sidebar Context
@@ -98,6 +95,7 @@ const getMenuItems = (role: Role): NavItem[] => {
         { path: '/gym/dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/gym/edit-profile', label: 'Edit Profile', icon: Edit },
         { path: '/gym/upload-media', label: 'Upload Media', icon: Upload },
+        { path: '/gym/branches', label: 'Gym Centers', icon: Building },
         { path: '/gym/trainers', label: 'Trainers', icon: UserCog },
         { path: '/gym/members', label: 'Members', icon: Users },
         { path: '/gym/workout-plans', label: 'Workout Plans', icon: Dumbbell },

@@ -6,8 +6,14 @@ import { useAuth } from '../../context/AuthContext';
 
 interface GymProfile {
   _id: string;
-  name: string;
-  address: string;
+  gymName: string;
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  };
   email: string;
   phone: string;
   website?: string;
@@ -18,7 +24,7 @@ interface GymProfile {
 
 interface GymResponse {
   _id: string;
-  name: string;
+  gymName: string;
   [key: string]: any;
 }
 
@@ -32,7 +38,13 @@ const EditProfile = () => {
   
   const [formData, setFormData] = useState({
     gymName: '',
-    address: '',
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: ''
+    },
     phone: '',
     email: '',
     website: '',
@@ -51,8 +63,14 @@ const EditProfile = () => {
           const gymData = await gymService.getGymById(gyms[0]._id) as GymProfile;
           setGymId(gymData._id);
           setFormData({
-            gymName: gymData.name || '',
-            address: gymData.address || '',
+            gymName: gymData.gymName || '',
+            address: gymData.address || {
+              street: '',
+              city: '',
+              state: '',
+              zipCode: '',
+              country: ''
+            },
             phone: gymData.phone || '',
             email: gymData.email || '',
             website: gymData.website || '',
@@ -78,10 +96,23 @@ const EditProfile = () => {
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    // Handle address fields separately
+    if (name.startsWith('address.')) {
+      const addressField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          [addressField]: value
+        }
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
   };
 
   const handleLogoChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -122,7 +153,7 @@ const EditProfile = () => {
       
       // Prepare the update data
       const updateData = {
-        name: formData.gymName,
+        gymName: formData.gymName,
         address: formData.address,
         phone: formData.phone,
         email: formData.email,
@@ -205,22 +236,85 @@ const EditProfile = () => {
 
           {/* Address */}
           <div>
-            <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Address
             </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MapPin className="h-5 w-5 text-gray-400" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="address.street" className="block text-sm text-gray-600">
+                  Street
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <MapPin className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    id="address.street"
+                    name="address.street"
+                    value={formData.address.street}
+                    onChange={handleChange}
+                    className="block w-full pl-10 rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500"
+                    required
+                  />
+                </div>
               </div>
-              <input
-                type="text"
-                id="address"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                className="block w-full pl-10 rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500"
-                required
-              />
+              <div>
+                <label htmlFor="address.city" className="block text-sm text-gray-600">
+                  City
+                </label>
+                <input
+                  type="text"
+                  id="address.city"
+                  name="address.city"
+                  value={formData.address.city}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="address.state" className="block text-sm text-gray-600">
+                  State
+                </label>
+                <input
+                  type="text"
+                  id="address.state"
+                  name="address.state"
+                  value={formData.address.state}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="address.zipCode" className="block text-sm text-gray-600">
+                  ZIP Code
+                </label>
+                <input
+                  type="text"
+                  id="address.zipCode"
+                  name="address.zipCode"
+                  value={formData.address.zipCode}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="address.country" className="block text-sm text-gray-600">
+                  Country
+                </label>
+                <input
+                  type="text"
+                  id="address.country"
+                  name="address.country"
+                  value={formData.address.country}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
+                />
+              </div>
             </div>
           </div>
 
@@ -302,6 +396,7 @@ const EditProfile = () => {
                   name="workingHours"
                   value={formData.workingHours}
                   onChange={handleChange}
+                  placeholder="e.g. Mon-Fri: 6am-10pm, Sat-Sun: 8am-8pm"
                   className="block w-full pl-10 rounded-md border-gray-300 focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>

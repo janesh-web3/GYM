@@ -113,6 +113,61 @@ export const gymService = {
   }
 };
 
+// Branch service
+export const branchService = {
+  getAllBranches: async () => {
+    return apiMethods.get('/branches');
+  },
+  
+  getBranchById: async (branchId) => {
+    return apiMethods.get(`/branches/${branchId}`);
+  },
+  
+  createBranch: async (branchData) => {
+    return apiMethods.post('/branches', branchData);
+  },
+  
+  updateBranch: async (branchId, branchData) => {
+    return apiMethods.put(`/branches/${branchId}`, branchData);
+  },
+  
+  deleteBranch: async (branchId) => {
+    return apiMethods.delete(`/branches/${branchId}`);
+  },
+  
+  addMember: async (branchId, memberId) => {
+    return apiMethods.post(`/branches/${branchId}/members`, { memberId });
+  },
+  
+  removeMember: async (branchId, memberId) => {
+    return apiMethods.delete(`/branches/${branchId}/members/${memberId}`);
+  },
+  
+  reassignMember: async (branchId, memberId, targetBranchId) => {
+    return apiMethods.put(`/branches/${branchId}/members/${memberId}/reassign`, { targetBranchId });
+  },
+  
+  addTrainer: async (branchId, trainerId) => {
+    return apiMethods.post(`/branches/${branchId}/trainers`, { trainerId });
+  },
+  
+  removeTrainer: async (branchId, trainerId) => {
+    return apiMethods.delete(`/branches/${branchId}/trainers/${trainerId}`);
+  },
+  
+  uploadPhoto: async (branchId, formData) => {
+    return apiMethods.post(`/branches/${branchId}/photos`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  
+  deletePhoto: async (branchId, photoId) => {
+    return apiMethods.delete(`/branches/${branchId}/photos/${photoId}`);
+  }
+};
+
 // Product service
 export const productService = {
   getAllProducts: async (page = 1, limit = 20, category = '', featured = false) => {

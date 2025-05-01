@@ -16,6 +16,8 @@ import DietPlans from "./pages/gym/DietPlans";
 import Scheduling from "./pages/gym/Scheduling";
 import Attendance from "./pages/gym/Attendance";
 import MemberProgress from "./pages/gym/MemberProgress";
+import Branches from "./pages/gym/Branches";
+import BranchProfile from "./pages/gym/BranchProfile";
 import MemberDashboard from "./pages/member/Dashboard";
 import MemberProfile from "./pages/member/Profile";
 import MemberWorkoutPlans from "./pages/member/WorkoutPlan";
@@ -70,6 +72,8 @@ const AppRoutes = () => {
           <Route path="scheduling" element={<Scheduling />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="member-progress" element={<MemberProgress />} />
+          <Route path="branches" element={<Branches />} />
+          <Route path="branches/:branchId" element={<BranchProfile />} />
         </Route>
       </Route>
 
