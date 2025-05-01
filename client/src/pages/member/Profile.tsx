@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { User, Edit2, Save, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Edit2, Save, X, Loader } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { showError, showSuccess } from '../../utils/toast';
 
 interface ProfileData {
   name: string;
@@ -13,19 +15,60 @@ interface ProfileData {
 }
 
 const Profile = () => {
+  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData>({
-    name: 'John Doe',
-    email: 'john@example.com',
-    age: 28,
-    weight: 75,
-    height: 180,
-    membershipType: 'Premium',
-    joinDate: '2024-01-01',
+    name: '',
+    email: '',
+    age: 0,
+    weight: 0,
+    height: 0,
+    membershipType: '',
+    joinDate: '',
     image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e',
   });
 
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        const response = await fetch(`/api/members/${user.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile data');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+          setProfile({
+            name: data.data.name || '',
+            email: data.data.email || '',
+            age: data.data.age || 0,
+            weight: data.data.progressMetrics?.weight?.[0]?.value || 0,
+            height: data.data.progressMetrics?.height?.[0]?.value || 0,
+            membershipType: data.data.membershipType || 'Standard',
+            joinDate: data.data.joinedDate || new Date().toISOString(),
+            image: data.data.image || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e',
+          });
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
+        showError('Failed to load profile data');
+        setLoading(false);
+      }
+    };
+    
+    fetchProfileData();
+  }, [user]);
+
   const calculateBMI = (weight: number, height: number) => {
+    if (!weight || !height) return '0.0';
     const heightInMeters = height / 100;
     return (weight / (heightInMeters * heightInMeters)).toFixed(1);
   };
@@ -40,10 +83,70 @@ const Profile = () => {
   const bmi = calculateBMI(profile.weight, profile.height);
   const bmiCategory = getBMICategory(parseFloat(bmi));
 
-  const handleSave = () => {
-    setIsEditing(false);
-    // Here you would typically make an API call to save the changes
+  const handleSave = async () => {
+    try {
+      setIsEditing(false);
+      
+      // Make API call to update profile
+      const response = await fetch(`/api/members/${user?.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: profile.name,
+          email: profile.email,
+          age: profile.age
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update profile');
+      }
+      
+      // If weight or height changed, add a new progress metric
+      if (profile.weight > 0 || profile.height > 0) {
+        if (profile.weight > 0) {
+          await fetch(`/api/members/${user?.id}/progress/weight`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              value: profile.weight,
+              unit: 'kg',
+            }),
+          });
+        }
+        
+        if (profile.height > 0) {
+          await fetch(`/api/members/${user?.id}/progress/height`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              value: profile.height,
+              unit: 'cm',
+            }),
+          });
+        }
+      }
+      
+      showSuccess('Profile updated successfully');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showError('Failed to update profile');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

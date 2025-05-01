@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Plus,
   Edit,
@@ -9,8 +9,11 @@ import {
   Clock,
   Repeat,
   PlusCircle,
-  X
+  X,
+  Loader
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { showSuccess, showError, showLoading, updateToast } from '../../utils/toast';
 
 interface Exercise {
   id: string;
@@ -34,41 +37,15 @@ interface WorkoutPlan {
 }
 
 const WorkoutPlanner = () => {
-  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([
-    {
-      id: '1',
-      title: 'Full Body Strength',
-      description: 'A comprehensive full body workout focusing on strength and muscle growth',
-      duration: '60 minutes',
-      difficulty: 'Intermediate',
-      exercises: [
-        {
-          id: '1',
-          name: 'Barbell Squat',
-          sets: 4,
-          reps: 8,
-          weight: 135,
-          restTime: 90,
-          notes: 'Keep back straight, chest up'
-        },
-        {
-          id: '2',
-          name: 'Bench Press',
-          sets: 4,
-          reps: 10,
-          weight: 155,
-          restTime: 90,
-          notes: 'Full range of motion'
-        }
-      ],
-      targetMuscles: ['Legs', 'Chest', 'Back', 'Shoulders', 'Arms'],
-      createdAt: '2024-04-30'
-    }
-  ]);
-
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [assignedMemberId, setAssignedMemberId] = useState<string | null>(null);
+  const [members, setMembers] = useState<{id: string, name: string}[]>([]);
+  const { user } = useAuth();
 
   const [newExercise, setNewExercise] = useState<Exercise>({
     id: '',
@@ -90,6 +67,82 @@ const WorkoutPlanner = () => {
     targetMuscles: [],
     createdAt: new Date().toISOString()
   });
+
+  // Check URL for member ID (for direct assignment)
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const memberId = queryParams.get('memberId');
+    if (memberId) {
+      setAssignedMemberId(memberId);
+    }
+  }, []);
+
+  // Fetch workout plans and members
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        if (!user) return;
+
+        // Fetch workout plans
+        const plansResponse = await fetch(`/api/workout-plans?trainerId=${user.id}`);
+        if (!plansResponse.ok) {
+          throw new Error('Failed to fetch workout plans');
+        }
+        
+        const plansData = await plansResponse.json();
+        
+        if (plansData.success && plansData.data) {
+          // Map API response to our WorkoutPlan interface
+          const formattedPlans = plansData.data.map((plan: any) => ({
+            id: plan._id,
+            title: plan.title,
+            description: plan.description || '',
+            duration: plan.duration || '60 minutes',
+            difficulty: plan.difficulty || 'Intermediate',
+            exercises: plan.exercises ? plan.exercises.map((ex: any) => ({
+              id: ex._id,
+              name: ex.name,
+              sets: ex.sets,
+              reps: ex.reps,
+              weight: ex.weight,
+              restTime: ex.restTime,
+              notes: ex.notes || ''
+            })) : [],
+            targetMuscles: plan.targetMuscles || [],
+            createdAt: plan.createdAt || new Date().toISOString()
+          }));
+          
+          setWorkoutPlans(formattedPlans);
+        }
+        
+        // Fetch members (for assignment)
+        const membersResponse = await fetch(`/api/trainers/${user.id}/members`);
+        if (!membersResponse.ok) {
+          throw new Error('Failed to fetch members');
+        }
+        
+        const membersData = await membersResponse.json();
+        
+        if (membersData.success && membersData.data) {
+          setMembers(membersData.data.map((member: any) => ({
+            id: member._id,
+            name: member.name
+          })));
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching workout plans:', error);
+        showError('Failed to load workout plans');
+        setLoading(false);
+      }
+    };
+    
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
   const handleAddExercise = () => {
     if (selectedPlan) {
@@ -113,20 +166,164 @@ const WorkoutPlanner = () => {
     }
   };
 
-  const handleSavePlan = () => {
-    if (selectedPlan) {
-      setWorkoutPlans(workoutPlans.map(plan => 
-        plan.id === selectedPlan.id ? selectedPlan : plan
-      ));
-    } else {
-      setWorkoutPlans([...workoutPlans, { ...newPlan, id: Date.now().toString() }]);
+  const handleSavePlan = async () => {
+    try {
+      setSaving(true);
+      if (!user) {
+        showError('You must be logged in to save workout plans');
+        return;
+      }
+      
+      // Format data for API
+      const planData = selectedPlan ? {
+        title: selectedPlan.title,
+        description: selectedPlan.description,
+        duration: selectedPlan.duration,
+        difficulty: selectedPlan.difficulty,
+        exercises: selectedPlan.exercises.map(ex => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight,
+          restTime: ex.restTime,
+          notes: ex.notes
+        })),
+        targetMuscles: selectedPlan.targetMuscles,
+        trainerId: user.id,
+        ...(assignedMemberId ? { memberId: assignedMemberId } : {})
+      } : {
+        title: newPlan.title,
+        description: newPlan.description,
+        duration: newPlan.duration,
+        difficulty: newPlan.difficulty,
+        exercises: newPlan.exercises.map(ex => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: ex.weight,
+          restTime: ex.restTime,
+          notes: ex.notes
+        })),
+        targetMuscles: newPlan.targetMuscles,
+        trainerId: user.id,
+        ...(assignedMemberId ? { memberId: assignedMemberId } : {})
+      };
+      
+      const toastId = showLoading(selectedPlan ? 'Updating workout plan...' : 'Creating workout plan...');
+      
+      // Call API to create or update plan
+      const response = await fetch(
+        selectedPlan ? `/api/workout-plans/${selectedPlan.id}` : '/api/workout-plans', 
+        {
+          method: selectedPlan ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(planData),
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(selectedPlan ? 'Failed to update workout plan' : 'Failed to create workout plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        if (selectedPlan) {
+          // Update existing plan in state
+          setWorkoutPlans(workoutPlans.map(plan => 
+            plan.id === selectedPlan.id ? {
+              ...selectedPlan,
+              ...data.data,
+              id: data.data._id || selectedPlan.id,
+              exercises: data.data.exercises.map((ex: any) => ({
+                id: ex._id || Date.now().toString(),
+                name: ex.name,
+                sets: ex.sets,
+                reps: ex.reps,
+                weight: ex.weight,
+                restTime: ex.restTime,
+                notes: ex.notes || ''
+              }))
+            } : plan
+          ));
+        } else {
+          // Add new plan to state
+          const newPlanFromApi = {
+            id: data.data._id,
+            title: data.data.title,
+            description: data.data.description || '',
+            duration: data.data.duration || '60 minutes',
+            difficulty: data.data.difficulty || 'Intermediate',
+            exercises: data.data.exercises ? data.data.exercises.map((ex: any) => ({
+              id: ex._id || Date.now().toString(),
+              name: ex.name,
+              sets: ex.sets,
+              reps: ex.reps,
+              weight: ex.weight,
+              restTime: ex.restTime,
+              notes: ex.notes || ''
+            })) : [],
+            targetMuscles: data.data.targetMuscles || [],
+            createdAt: data.data.createdAt || new Date().toISOString()
+          };
+          
+          setWorkoutPlans([...workoutPlans, newPlanFromApi]);
+        }
+        
+        setIsModalOpen(false);
+        setSelectedPlan(null);
+        
+        // Reset assigned member ID if it was from URL
+        if (assignedMemberId) {
+          updateToast(toastId, `Workout plan ${selectedPlan ? 'updated' : 'created'} and assigned successfully!`, 'success');
+          // Redirect to members page after assigning
+          window.location.href = '/trainer/members';
+        } else {
+          updateToast(toastId, `Workout plan ${selectedPlan ? 'updated' : 'created'} successfully!`, 'success');
+        }
+      } else {
+        throw new Error(data.message || `Failed to ${selectedPlan ? 'update' : 'create'} workout plan`);
+      }
+    } catch (error) {
+      console.error(`Error ${selectedPlan ? 'updating' : 'creating'} workout plan:`, error);
+      showError(`Failed to ${selectedPlan ? 'update' : 'create'} workout plan`);
+    } finally {
+      setSaving(false);
     }
-    setIsModalOpen(false);
-    setSelectedPlan(null);
   };
 
-  const handleDeletePlan = (id: string) => {
-    setWorkoutPlans(workoutPlans.filter(plan => plan.id !== id));
+  const handleDeletePlan = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this workout plan?')) {
+      return;
+    }
+    
+    const toastId = showLoading('Deleting workout plan...');
+    
+    try {
+      // Call API to delete plan
+      const response = await fetch(`/api/workout-plans/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete workout plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Remove from local state
+        setWorkoutPlans(workoutPlans.filter(plan => plan.id !== id));
+        updateToast(toastId, 'Workout plan deleted successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to delete workout plan');
+      }
+    } catch (error) {
+      console.error('Error deleting workout plan:', error);
+      updateToast(toastId, 'Failed to delete workout plan', 'error');
+    }
   };
 
   const handleDeleteExercise = (planId: string, exerciseId: string) => {
@@ -139,7 +336,57 @@ const WorkoutPlanner = () => {
       }
       return plan;
     }));
+    
+    if (selectedPlan?.id === planId) {
+      setSelectedPlan({
+        ...selectedPlan,
+        exercises: selectedPlan.exercises.filter(ex => ex.id !== exerciseId)
+      });
+    }
   };
+
+  const handleAssignPlan = async (planId: string, memberId: string) => {
+    if (!user) {
+      showError('You must be logged in to assign workout plans');
+      return;
+    }
+    
+    const toastId = showLoading('Assigning workout plan...');
+    
+    try {
+      // Call API to assign plan to member
+      const response = await fetch(`/api/workout-plans/${planId}/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ memberId }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to assign workout plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        updateToast(toastId, 'Workout plan assigned successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to assign workout plan');
+      }
+    } catch (error) {
+      console.error('Error assigning workout plan:', error);
+      updateToast(toastId, 'Failed to assign workout plan', 'error');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

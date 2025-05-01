@@ -3,6 +3,9 @@ import { Link, Navigate } from 'react-router-dom';
 import { Role } from '../types/Role';
 import { useAuth } from '../context/AuthContext';
 import { showError } from '../utils/toast';
+import { Mail, Lock, UserPlus, User, AlertCircle, CheckCircle } from 'lucide-react';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
 
 const Signup = () => {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -12,6 +15,13 @@ const Signup = () => {
     password: '',
     confirmPassword: '',
   });
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
+  const [formSuccess, setFormSuccess] = useState(false);
   
   const { register, isAuthenticated, loading, user } = useAuth();
 
@@ -29,8 +39,50 @@ const Signup = () => {
     }));
   };
 
+  const validateForm = () => {
+    const newErrors: {
+      name?: string;
+      email?: string;
+      password?: string;
+      confirmPassword?: string;
+    } = {};
+    let isValid = true;
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+      isValid = false;
+    }
+    
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Email is invalid';
+      isValid = false;
+    }
+    
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+      isValid = false;
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+      isValid = false;
+    }
+    
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+      isValid = false;
+    }
+    
+    setErrors(newErrors);
+    return isValid;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormSuccess(false);
+    
+    if (!validateForm()) return;
     
     // Validate password match
     if (formData.password !== formData.confirmPassword) {
@@ -52,6 +104,7 @@ const Signup = () => {
         password: formData.password,
         role: selectedRole
       });
+      setFormSuccess(true);
     } catch (err) {
       // Error handling is done in auth context with toast
       console.error('Registration failed:', err);
@@ -61,134 +114,183 @@ const Signup = () => {
   const roles: Role[] = ['superadmin', 'admin', 'gymOwner', 'member', 'trainer'];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Create your account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Or{' '}
-          <Link to="/login" className="font-medium text-primary-600 hover:text-primary-500">
-            sign in to your existing account
-          </Link>
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Full Name
-              </label>
-              <div className="mt-1">
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-600 to-emerald-500 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl w-full flex flex-col lg:flex-row overflow-hidden rounded-2xl shadow-2xl">
+        {/* Left column - Image and text (hidden on mobile) */}
+        <div className="hidden lg:flex lg:w-1/2 bg-slate-800 text-white p-12 flex-col justify-between relative overflow-hidden">
+          <div className="absolute inset-0 opacity-20">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-emerald-500 rotate-12 transform scale-150 translate-x-1/4 translate-y-1/4 rounded-full blur-3xl"></div>
+          </div>
+          
+          <div className="relative z-10">
+            <div className="w-16 h-16 bg-white rounded-xl shadow-lg flex items-center justify-center">
+              <div className="text-indigo-600 text-2xl font-bold">G</div>
+            </div>
+            <h1 className="text-4xl font-bold mt-12">Join GymHub Today</h1>
+            <p className="mt-6 text-lg text-white/80">
+              Sign up to start your fitness journey, connect with trainers, and access premium workout plans designed just for you.
+            </p>
+            <div className="mt-10">
+              <div className="bg-slate-700/50 p-4 rounded-xl">
+                <p className="text-white font-medium">
+                  "GymHub transformed how I manage my fitness routine. Highly recommended!"
+                </p>
+                <p className="text-white/70 text-sm mt-2">— Sarah J., Member since 2022</p>
               </div>
+            </div>
+          </div>
+          
+          <div className="relative z-10">
+            <p className="text-white/70 text-sm">
+              &copy; {new Date().getFullYear()} GymHub. All rights reserved.
+            </p>
+          </div>
+        </div>
+        
+        {/* Right column - Signup form */}
+        <div className="w-full lg:w-1/2 bg-white/90 backdrop-blur-sm p-8 sm:p-12">
+          <div className="mb-8">
+            <h2 className="text-3xl font-bold text-slate-800 tracking-tight">
+              Create your account
+            </h2>
+            <p className="mt-2 text-slate-600">
+              Already have an account?{' '}
+              <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
+                Sign in instead
+              </Link>
+            </p>
+          </div>
+          
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            {formSuccess && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center text-emerald-800">
+                <CheckCircle className="w-5 h-5 text-emerald-500 mr-3" />
+                <span>Account created successfully! Redirecting...</span>
+              </div>
+            )}
+            
+            <div>
+              <Input
+                label="Full Name"
+                id="name"
+                name="name"
+                type="text"
+                required
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="John Doe"
+                startIcon={<User className="w-5 h-5" />}
+                error={errors.name}
+                fullWidth
+              />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
-              </label>
-              <div className="mt-1">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                />
-              </div>
+              <Input
+                label="Email address"
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                startIcon={<Mail className="w-5 h-5" />}
+                error={errors.email}
+                fullWidth
+              />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <div className="mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                />
-              </div>
+              <Input
+                label="Password"
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="••••••••"
+                startIcon={<Lock className="w-5 h-5" />}
+                showPasswordToggle
+                error={errors.password}
+                helperText="Password must be at least 6 characters"
+                fullWidth
+              />
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
-              <div className="mt-1">
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                />
-              </div>
+              <Input
+                label="Confirm Password"
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                placeholder="••••••••"
+                startIcon={<Lock className="w-5 h-5" />}
+                showPasswordToggle
+                error={errors.confirmPassword}
+                fullWidth
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-slate-700 mb-3">
                 Select your role
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {roles.map((role) => (
                   <button
                     key={role}
                     type="button"
                     onClick={() => setSelectedRole(role)}
-                    className={`${
-                      selectedRole === role
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-50'
-                    } px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
+                    className={`
+                      flex flex-col items-center justify-center px-3 py-2.5 border rounded-lg shadow-sm text-sm font-medium
+                      transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
+                      ${
+                        selectedRole === role
+                          ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border-indigo-700 shadow-md'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                      }
+                    `}
                   >
-                    {role.charAt(0).toUpperCase() + role.slice(1)}
+                    <User className={`w-5 h-5 mb-1 ${selectedRole === role ? 'text-white' : 'text-slate-500'}`} />
+                    <span className="truncate">{role.charAt(0).toUpperCase() + role.slice(1)}</span>
                   </button>
                 ))}
               </div>
+              {!selectedRole && Object.keys(errors).length > 0 && (
+                <p className="mt-2 text-sm text-red-600">Please select a role</p>
+              )}
             </div>
 
-            <div>
-              <button
+            <div className="pt-2">
+              <Button
                 type="submit"
+                fullWidth
+                size="lg"
+                loading={loading}
                 disabled={!selectedRole || formData.password !== formData.confirmPassword || loading}
-                className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                  selectedRole && formData.password === formData.confirmPassword && !loading
-                    ? 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
-                    : 'bg-gray-400 cursor-not-allowed'
-                }`}
+                icon={<UserPlus className="w-5 h-5" />}
+                className="mt-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 shadow-lg hover:shadow-xl transition-all duration-200 text-white py-3 rounded-lg"
               >
-                {loading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Creating account...
-                  </>
-                ) : 'Sign up'}
-              </button>
+                {loading ? 'Creating account...' : 'Create account'}
+              </Button>
             </div>
+
+            <p className="text-xs text-slate-500 text-center mt-4">
+              By creating an account, you agree to our{' '}
+              <Link to="/terms" className="text-indigo-600 hover:text-indigo-500">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" className="text-indigo-600 hover:text-indigo-500">
+                Privacy Policy
+              </Link>
+            </p>
           </form>
         </div>
       </div>

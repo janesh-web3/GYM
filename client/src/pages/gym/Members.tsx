@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, User, Mail, Phone, Calendar, CreditCard } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, User, Mail, Phone, Calendar, CreditCard, Loader } from 'lucide-react';
+import { gymService } from '../../lib/services';
+import { useAuth } from '../../context/AuthContext';
+import { showSuccess, showError, showLoading, updateToast } from '../../utils/toast';
 
 interface Member {
   id: string;
@@ -13,31 +16,19 @@ interface Member {
   image: string;
 }
 
+interface GymResponse {
+  _id: string;
+  name: string;
+  [key: string]: any;
+}
+
 const Members = () => {
-  const [members, setMembers] = useState<Member[]>([
-    {
-      id: '1',
-      name: 'Michael Brown',
-      email: 'michael.b@example.com',
-      phone: '+1 (555) 123-4567',
-      membershipType: 'Premium',
-      joinDate: '2024-01-15',
-      expiryDate: '2024-07-15',
-      status: 'active',
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d',
-    },
-    {
-      id: '2',
-      name: 'Emily Davis',
-      email: 'emily.d@example.com',
-      phone: '+1 (555) 987-6543',
-      membershipType: 'Basic',
-      joinDate: '2024-02-01',
-      expiryDate: '2024-08-01',
-      status: 'active',
-      image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330',
-    },
-  ]);
+  const { user } = useAuth();
+  const [gymId, setGymId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  
+  const [members, setMembers] = useState<Member[]>([]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -54,38 +45,153 @@ const Members = () => {
     image: '',
   });
 
-  const handleAddMember = () => {
-    const member: Member = {
-      ...newMember,
-      id: Date.now().toString(),
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        setLoading(true);
+        // In a real app, we'd fetch the gym ID associated with this owner
+        const gyms = await gymService.getAllGyms() as GymResponse[];
+        if (gyms && gyms.length > 0) {
+          const gymId = gyms[0]._id;
+          setGymId(gymId);
+          
+          // In a real app, we would fetch members from an API endpoint
+          // const membersData = await gymService.getMembers(gymId);
+          // setMembers(membersData);
+          
+          // For now, using sample data
+          setMembers([
+            {
+              id: '1',
+              name: 'Michael Brown',
+              email: 'michael.b@example.com',
+              phone: '+1 (555) 123-4567',
+              membershipType: 'Premium',
+              joinDate: '2024-01-15',
+              expiryDate: '2024-07-15',
+              status: 'active',
+              image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d',
+            },
+            {
+              id: '2',
+              name: 'Emily Davis',
+              email: 'emily.d@example.com',
+              phone: '+1 (555) 987-6543',
+              membershipType: 'Basic',
+              joinDate: '2024-02-01',
+              expiryDate: '2024-08-01',
+              status: 'active',
+              image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330',
+            },
+          ]);
+        }
+        setLoading(false);
+      } catch (error) {
+        setLoading(false);
+        showError('Failed to load members');
+        console.error('Error fetching members:', error);
+      }
     };
-    setMembers((prev) => [...prev, member]);
-    setIsAddModalOpen(false);
-    setNewMember({
-      name: '',
-      email: '',
-      phone: '',
-      membershipType: '',
-      joinDate: '',
-      expiryDate: '',
-      status: 'pending',
-      image: '',
-    });
+    
+    if (user) {
+      fetchMembers();
+    }
+  }, [user]);
+
+  const handleAddMember = async () => {
+    if (!gymId) {
+      showError('No gym associated with this account');
+      return;
+    }
+    
+    const toastId = showLoading('Adding new member...');
+    setSaving(true);
+    
+    try {
+      // In a real app, we would call an API endpoint
+      // const response = await gymService.addMember(gymId, newMember);
+      // const addedMember = response.data;
+      
+      // For now, create a new member locally
+      const member: Member = {
+        ...newMember,
+        id: Date.now().toString(),
+      };
+      
+      setMembers((prev) => [...prev, member]);
+      setIsAddModalOpen(false);
+      setNewMember({
+        name: '',
+        email: '',
+        phone: '',
+        membershipType: '',
+        joinDate: '',
+        expiryDate: '',
+        status: 'pending',
+        image: '',
+      });
+      
+      setSaving(false);
+      updateToast(toastId, 'Member added successfully!', 'success');
+    } catch (error) {
+      setSaving(false);
+      updateToast(toastId, 'Failed to add member.', 'error');
+      console.error('Error adding member:', error);
+    }
   };
 
-  const handleEditMember = () => {
-    if (!selectedMember) return;
-    setMembers((prev) =>
-      prev.map((member) =>
-        member.id === selectedMember.id ? selectedMember : member
-      )
-    );
-    setIsEditModalOpen(false);
-    setSelectedMember(null);
+  const handleEditMember = async () => {
+    if (!selectedMember || !gymId) {
+      showError('No member selected or gym associated with this account');
+      return;
+    }
+    
+    const toastId = showLoading('Updating member...');
+    setSaving(true);
+    
+    try {
+      // In a real app, we would call an API endpoint
+      // await gymService.updateMember(gymId, selectedMember.id, selectedMember);
+      
+      // Update local state
+      setMembers((prev) =>
+        prev.map((member) =>
+          member.id === selectedMember.id ? selectedMember : member
+        )
+      );
+      
+      setIsEditModalOpen(false);
+      setSelectedMember(null);
+      
+      setSaving(false);
+      updateToast(toastId, 'Member updated successfully!', 'success');
+    } catch (error) {
+      setSaving(false);
+      updateToast(toastId, 'Failed to update member.', 'error');
+      console.error('Error updating member:', error);
+    }
   };
 
-  const handleDeleteMember = (id: string) => {
-    setMembers((prev) => prev.filter((member) => member.id !== id));
+  const handleDeleteMember = async (id: string) => {
+    if (!gymId) {
+      showError('No gym associated with this account');
+      return;
+    }
+    
+    const toastId = showLoading('Deleting member...');
+    
+    try {
+      // In a real app, we would call an API endpoint
+      // await gymService.deleteMember(gymId, id);
+      
+      // Update local state
+      setMembers((prev) => prev.filter((member) => member.id !== id));
+      
+      updateToast(toastId, 'Member deleted successfully!', 'success');
+    } catch (error) {
+      updateToast(toastId, 'Failed to delete member.', 'error');
+      console.error('Error deleting member:', error);
+    }
   };
 
   const getStatusColor = (status: Member['status']) => {
@@ -101,6 +207,14 @@ const Members = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -114,82 +228,97 @@ const Members = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {members.map((member) => (
-          <div
-            key={member.id}
-            className="bg-white rounded-lg shadow overflow-hidden"
+      {members.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-8 text-center">
+          <User className="w-16 h-16 mx-auto text-gray-400" />
+          <h2 className="mt-4 text-xl font-medium text-gray-900">No Members Yet</h2>
+          <p className="mt-2 text-gray-500">Get started by adding your first member</p>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="mt-4 inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
           >
-            <div className="relative">
-              <img
-                src={member.image}
-                alt={member.name}
-                className="w-full h-48 object-cover"
-              />
-              <div className="absolute top-2 right-2 flex space-x-2">
-                <button
-                  onClick={() => {
-                    setSelectedMember(member);
-                    setIsEditModalOpen(true);
-                  }}
-                  className="p-2 bg-white rounded-full shadow hover:bg-gray-100"
-                >
-                  <Edit2 className="w-4 h-4 text-gray-600" />
-                </button>
-                <button
-                  onClick={() => handleDeleteMember(member.id)}
-                  className="p-2 bg-white rounded-full shadow hover:bg-gray-100"
-                >
-                  <Trash2 className="w-4 h-4 text-red-600" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {member.name}
-                </h3>
-                <span
-                  className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
-                    member.status
-                  )}`}
-                >
-                  {member.status}
-                </span>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Member
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {members.map((member) => (
+            <div
+              key={member.id}
+              className="bg-white rounded-lg shadow overflow-hidden"
+            >
+              <div className="relative">
+                <img
+                  src={member.image}
+                  alt={member.name}
+                  className="w-full h-48 object-cover"
+                />
+                <div className="absolute top-2 right-2 flex space-x-2">
+                  <button
+                    onClick={() => {
+                      setSelectedMember(member);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="p-2 bg-white rounded-full shadow hover:bg-gray-100"
+                  >
+                    <Edit2 className="w-4 h-4 text-gray-600" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMember(member.id)}
+                    className="p-2 bg-white rounded-full shadow hover:bg-gray-100"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center text-sm text-gray-600">
-                  <Mail className="w-4 h-4 mr-2" />
-                  {member.email}
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {member.name}
+                  </h3>
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                      member.status
+                    )}`}
+                  >
+                    {member.status}
+                  </span>
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Phone className="w-4 h-4 mr-2" />
-                  {member.phone}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  {member.membershipType}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Joined: {new Date(member.joinDate).toLocaleDateString()}
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Expires: {new Date(member.expiryDate).toLocaleDateString()}
+
+                <div className="space-y-2">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Mail className="w-4 h-4 mr-2" />
+                    {member.email}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Phone className="w-4 h-4 mr-2" />
+                    {member.phone}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    {member.membershipType}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Joined: {new Date(member.joinDate).toLocaleDateString()}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Expires: {new Date(member.expiryDate).toLocaleDateString()}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Add Member Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold mb-4">Add New Member</h2>
             <div className="space-y-4">
               <div>
@@ -203,6 +332,7 @@ const Members = () => {
                     setNewMember({ ...newMember, name: e.target.value })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -216,6 +346,7 @@ const Members = () => {
                     setNewMember({ ...newMember, email: e.target.value })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -229,6 +360,7 @@ const Members = () => {
                     setNewMember({ ...newMember, phone: e.target.value })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -244,6 +376,7 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 >
                   <option value="">Select Type</option>
                   <option value="Basic">Basic</option>
@@ -262,6 +395,7 @@ const Members = () => {
                     setNewMember({ ...newMember, joinDate: e.target.value })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -275,6 +409,7 @@ const Members = () => {
                     setNewMember({ ...newMember, expiryDate: e.target.value })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -290,25 +425,47 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                   <option value="pending">Pending</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Image URL
+                </label>
+                <input
+                  type="url"
+                  value={newMember.image}
+                  onChange={(e) =>
+                    setNewMember({ ...newMember, image: e.target.value })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                />
+              </div>
             </div>
             <div className="mt-6 flex justify-end space-x-3">
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddMember}
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                disabled={saving}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center"
               >
-                Add Member
+                {saving ? (
+                  <>
+                    <Loader className="w-4 h-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Member'
+                )}
               </button>
             </div>
           </div>
@@ -317,8 +474,8 @@ const Members = () => {
 
       {/* Edit Member Modal */}
       {isEditModalOpen && selectedMember && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold mb-4">Edit Member</h2>
             <div className="space-y-4">
               <div>
@@ -335,6 +492,7 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -351,6 +509,7 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -367,6 +526,7 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -382,6 +542,7 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 >
                   <option value="Basic">Basic</option>
                   <option value="Premium">Premium</option>
@@ -402,6 +563,7 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -418,6 +580,7 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -433,11 +596,28 @@ const Members = () => {
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  required
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                   <option value="pending">Pending</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Image URL
+                </label>
+                <input
+                  type="url"
+                  value={selectedMember.image}
+                  onChange={(e) =>
+                    setSelectedMember({
+                      ...selectedMember,
+                      image: e.target.value,
+                    })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                />
               </div>
             </div>
             <div className="mt-6 flex justify-end space-x-3">
@@ -446,15 +626,23 @@ const Members = () => {
                   setIsEditModalOpen(false);
                   setSelectedMember(null);
                 }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleEditMember}
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                disabled={saving}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center"
               >
-                Save Changes
+                {saving ? (
+                  <>
+                    <Loader className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
               </button>
             </div>
           </div>

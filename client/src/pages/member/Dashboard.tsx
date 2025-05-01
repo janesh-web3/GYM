@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Dumbbell, 
@@ -9,8 +9,11 @@ import {
   ShoppingCart,
   ArrowRight,
   CheckCircle2,
-  Clock
+  Clock,
+  Loader
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { showError } from '../../utils/toast';
 
 interface QuickCard {
   id: string;
@@ -21,34 +24,40 @@ interface QuickCard {
   stats?: string;
 }
 
-const Dashboard = () => {
-  const [quickCards] = useState<QuickCard[]>([
-    {
-      id: '1',
-      title: "Today's Workout",
-      description: "Push Day - Chest & Triceps",
-      icon: <Dumbbell className="w-6 h-6" />,
-      link: "/member/workout-plan",
-      stats: "6 exercises • 45 mins"
-    },
-    {
-      id: '2',
-      title: "Today's Meals",
-      description: "High Protein Diet Plan",
-      icon: <Utensils className="w-6 h-6" />,
-      link: "/member/diet-plan",
-      stats: "2,200 calories"
-    },
-    {
-      id: '3',
-      title: "Last Attendance",
-      description: "Checked in yesterday",
-      icon: <Calendar className="w-6 h-6" />,
-      link: "/member/attendance",
-      stats: "2 hours • 4:30 PM"
-    }
-  ]);
+interface WorkoutData {
+  title: string;
+  description: string;
+  exerciseCount: number;
+  duration: number;
+}
 
+interface DietData {
+  title: string;
+  description: string;
+  calories: number;
+}
+
+interface AttendanceData {
+  lastCheckIn: string;
+  status: string;
+  duration: number;
+}
+
+interface DashboardData {
+  workout: WorkoutData | null;
+  diet: DietData | null;
+  attendance: AttendanceData | null;
+}
+
+const Dashboard = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<DashboardData>({
+    workout: null,
+    diet: null,
+    attendance: null
+  });
+  const [quickCards, setQuickCards] = useState<QuickCard[]>([]);
   const [shortcuts] = useState<QuickCard[]>([
     {
       id: '1',
@@ -72,6 +81,151 @@ const Dashboard = () => {
       link: "/member/profile"
     }
   ]);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        
+        // Fetch workout plans
+        const workoutResponse = await fetch(`/api/workout-plans/member/${user.id}`);
+        
+        // Fetch diet plans
+        const dietResponse = await fetch(`/api/diet-plans/member/${user.id}`);
+        
+        // Fetch attendance history
+        const attendanceResponse = await fetch(`/api/attendance/history?limit=1`);
+        
+        const newData: DashboardData = {
+          workout: null,
+          diet: null,
+          attendance: null
+        };
+        
+        // Process workout data
+        if (workoutResponse.ok) {
+          const workoutData = await workoutResponse.json();
+          if (workoutData.success && workoutData.data && workoutData.data.length > 0) {
+            const plan = workoutData.data[0];
+            newData.workout = {
+              title: plan.title || 'Workout Plan',
+              description: plan.goal || (plan.description ? plan.description.substring(0, 30) + '...' : 'No description'),
+              exerciseCount: plan.exercises ? plan.exercises.length : 0,
+              duration: plan.duration || 0
+            };
+          }
+        }
+        
+        // Process diet data
+        if (dietResponse.ok) {
+          const dietData = await dietResponse.json();
+          if (dietData.success && dietData.data && dietData.data.length > 0) {
+            const plan = dietData.data[0];
+            newData.diet = {
+              title: plan.title || 'Diet Plan',
+              description: plan.goal || (plan.description ? plan.description.substring(0, 30) + '...' : 'No description'),
+              calories: plan.calories || 0
+            };
+          }
+        }
+        
+        // Process attendance data
+        if (attendanceResponse.ok) {
+          const attendanceData = await attendanceResponse.json();
+          if (attendanceData.success && attendanceData.data && attendanceData.data.length > 0) {
+            const record = attendanceData.data[0];
+            newData.attendance = {
+              lastCheckIn: record.date || new Date().toISOString(),
+              status: record.status || 'present',
+              duration: record.duration || 0
+            };
+          }
+        }
+        
+        setDashboardData(newData);
+        
+        // Create quick cards based on fetched data
+        const cards: QuickCard[] = [];
+        
+        // Workout card
+        cards.push({
+          id: '1',
+          title: "Today's Workout",
+          description: newData.workout ? newData.workout.title : "No workout plan assigned",
+          icon: <Dumbbell className="w-6 h-6" />,
+          link: "/member/workout-plan",
+          stats: newData.workout ? 
+            `${newData.workout.exerciseCount} exercises • ${newData.workout.duration} mins` : 
+            "Contact your trainer"
+        });
+        
+        // Diet card
+        cards.push({
+          id: '2',
+          title: "Today's Meals",
+          description: newData.diet ? newData.diet.title : "No diet plan assigned",
+          icon: <Utensils className="w-6 h-6" />,
+          link: "/member/diet-plan",
+          stats: newData.diet ? 
+            `${newData.diet.calories} calories` : 
+            "Contact your trainer"
+        });
+        
+        // Attendance card
+        cards.push({
+          id: '3',
+          title: "Last Attendance",
+          description: newData.attendance ? 
+            formatDate(newData.attendance.lastCheckIn) : 
+            "No recent check-ins",
+          icon: <Calendar className="w-6 h-6" />,
+          link: "/member/attendance",
+          stats: newData.attendance ? 
+            `${newData.attendance.duration} mins • ${formatTime(newData.attendance.lastCheckIn)}` : 
+            "Check in at the gym"
+        });
+        
+        setQuickCards(cards);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        showError('Failed to load dashboard data');
+        setLoading(false);
+      }
+    };
+    
+    fetchDashboardData();
+  }, [user]);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Checked in today';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Checked in yesterday';
+    } else {
+      return `Checked in on ${date.toLocaleDateString()}`;
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

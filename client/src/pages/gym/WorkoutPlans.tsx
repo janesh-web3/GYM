@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Clock, Dumbbell, Target, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Clock, Dumbbell, Target, Users, Loader } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { showSuccess, showError, showLoading, updateToast } from '../../utils/toast';
+import { gymService } from '../../lib/services';
 
 interface Exercise {
   id: string;
@@ -7,7 +10,9 @@ interface Exercise {
   sets: number;
   reps: number;
   restTime: string;
-  description: string;
+  duration?: number;
+  instructions?: string;
+  targetMuscleGroup?: string;
 }
 
 interface WorkoutPlan {
@@ -15,69 +20,28 @@ interface WorkoutPlan {
   title: string;
   description: string;
   duration: string;
-  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
-  targetMuscle: string;
+  level: 'beginner' | 'intermediate' | 'advanced';
+  goal: string;
+  frequency: number;
   exercises: Exercise[];
-  image: string;
+  image?: string;
+  gymId?: string;
+  createdBy?: string;
+}
+
+interface GymResponse {
+  _id: string;
+  name: string;
+  [key: string]: any;
 }
 
 const WorkoutPlans = () => {
-  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([
-    {
-      id: '1',
-      title: 'Full Body Strength',
-      description: 'A comprehensive full-body workout focusing on strength and muscle building.',
-      duration: '60 minutes',
-      difficulty: 'Intermediate',
-      targetMuscle: 'Full Body',
-      image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b',
-      exercises: [
-        {
-          id: '1',
-          name: 'Squats',
-          sets: 4,
-          reps: 12,
-          restTime: '60 seconds',
-          description: 'Stand with feet shoulder-width apart, lower body by bending knees and hips.',
-        },
-        {
-          id: '2',
-          name: 'Bench Press',
-          sets: 4,
-          reps: 10,
-          restTime: '90 seconds',
-          description: 'Lie on bench, lower barbell to chest, press back up.',
-        },
-      ],
-    },
-    {
-      id: '2',
-      title: 'Upper Body Focus',
-      description: 'Targeted workout for upper body strength and definition.',
-      duration: '45 minutes',
-      difficulty: 'Advanced',
-      targetMuscle: 'Upper Body',
-      image: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b',
-      exercises: [
-        {
-          id: '1',
-          name: 'Pull-ups',
-          sets: 4,
-          reps: 8,
-          restTime: '90 seconds',
-          description: 'Hang from bar, pull body up until chin clears bar.',
-        },
-        {
-          id: '2',
-          name: 'Shoulder Press',
-          sets: 4,
-          reps: 10,
-          restTime: '60 seconds',
-          description: 'Press dumbbells overhead from shoulder height.',
-        },
-      ],
-    },
-  ]);
+  const { user } = useAuth();
+  const [gymId, setGymId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  
+  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>([]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -86,82 +50,335 @@ const WorkoutPlans = () => {
   const [newPlan, setNewPlan] = useState<Omit<WorkoutPlan, 'id'>>({
     title: '',
     description: '',
-    duration: '',
-    difficulty: 'Beginner',
-    targetMuscle: '',
+    duration: '4',
+    level: 'beginner',
+    goal: 'general_fitness',
+    frequency: 3,
     exercises: [],
     image: '',
   });
 
   const [newExercise, setNewExercise] = useState<Omit<Exercise, 'id'>>({
     name: '',
-    sets: 0,
-    reps: 0,
-    restTime: '',
-    description: '',
+    sets: 3,
+    reps: 10,
+    restTime: '60',
+    instructions: '',
+    targetMuscleGroup: '',
   });
 
+  useEffect(() => {
+    const fetchWorkoutPlans = async () => {
+      try {
+        setLoading(true);
+        // In a real app, we'd fetch the gym ID associated with this owner
+        const gyms = await gymService.getAllGyms() as GymResponse[];
+        if (gyms && gyms.length > 0) {
+          const gymId = gyms[0]._id;
+          setGymId(gymId);
+          
+          // Fetch workout plans from API
+          const response = await fetch(`/api/workout-plans?gymId=${gymId}`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch workout plans');
+          }
+          
+          const data = await response.json();
+          if (data.success && data.data) {
+            setWorkoutPlans(data.data.map((plan: any) => ({
+              id: plan._id,
+              title: plan.title,
+              description: plan.description,
+              duration: plan.duration.toString(),
+              level: plan.level,
+              goal: plan.goal,
+              frequency: plan.frequency,
+              exercises: plan.exercises.map((ex: any) => ({
+                id: ex._id,
+                name: ex.name,
+                sets: ex.sets,
+                reps: ex.reps,
+                restTime: ex.restTime.toString(),
+                duration: ex.duration,
+                instructions: ex.instructions,
+                targetMuscleGroup: ex.targetMuscleGroup
+              })),
+              image: plan.image || 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b',
+              gymId: plan.gymId,
+              createdBy: plan.createdBy
+            })));
+          }
+        }
+        setLoading(false);
+      } catch (error) {
+        setLoading(false);
+        showError('Failed to load workout plans');
+        console.error('Error fetching workout plans:', error);
+      }
+    };
+    
+    if (user) {
+      fetchWorkoutPlans();
+    }
+  }, [user]);
+
   const handleAddExercise = () => {
+    if (!newExercise.name || newExercise.sets <= 0 || newExercise.reps <= 0) {
+      showError('Please fill all required exercise fields');
+      return;
+    }
+    
     const exercise: Exercise = {
       ...newExercise,
       id: Date.now().toString(),
     };
+    
     setNewPlan((prev) => ({
       ...prev,
       exercises: [...prev.exercises, exercise],
     }));
+    
     setNewExercise({
       name: '',
-      sets: 0,
-      reps: 0,
-      restTime: '',
-      description: '',
+      sets: 3,
+      reps: 10,
+      restTime: '60',
+      instructions: '',
+      targetMuscleGroup: '',
     });
   };
 
-  const handleAddPlan = () => {
-    const plan: WorkoutPlan = {
-      ...newPlan,
-      id: Date.now().toString(),
-    };
-    setWorkoutPlans((prev) => [...prev, plan]);
-    setIsAddModalOpen(false);
-    setNewPlan({
-      title: '',
-      description: '',
-      duration: '',
-      difficulty: 'Beginner',
-      targetMuscle: '',
-      exercises: [],
-      image: '',
-    });
+  const handleAddPlan = async () => {
+    if (!gymId) {
+      showError('No gym associated with this account');
+      return;
+    }
+    
+    if (!newPlan.title || !newPlan.duration || newPlan.exercises.length === 0) {
+      showError('Please fill all required fields and add at least one exercise');
+      return;
+    }
+    
+    const toastId = showLoading('Creating workout plan...');
+    setSaving(true);
+    
+    try {
+      // Prepare workout plan for API
+      const planData = {
+        title: newPlan.title,
+        description: newPlan.description,
+        exercises: newPlan.exercises.map(ex => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          restTime: parseInt(ex.restTime),
+          duration: ex.duration || 0,
+          instructions: ex.instructions || '',
+          targetMuscleGroup: ex.targetMuscleGroup || ''
+        })),
+        duration: parseInt(newPlan.duration),
+        level: newPlan.level,
+        goal: newPlan.goal,
+        frequency: newPlan.frequency,
+        gymId: gymId,
+        isTemplate: true
+      };
+      
+      // Call API to create workout plan
+      const response = await fetch('/api/workout-plans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(planData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create workout plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        const createdPlan: WorkoutPlan = {
+          id: data.data._id,
+          title: data.data.title,
+          description: data.data.description,
+          duration: data.data.duration.toString(),
+          level: data.data.level,
+          goal: data.data.goal,
+          frequency: data.data.frequency,
+          exercises: data.data.exercises.map((ex: any) => ({
+            id: ex._id,
+            name: ex.name,
+            sets: ex.sets,
+            reps: ex.reps,
+            restTime: ex.restTime.toString(),
+            duration: ex.duration,
+            instructions: ex.instructions,
+            targetMuscleGroup: ex.targetMuscleGroup
+          })),
+          image: newPlan.image || 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b',
+          gymId: data.data.gymId,
+          createdBy: data.data.createdBy
+        };
+        
+        setWorkoutPlans((prev) => [...prev, createdPlan]);
+        setIsAddModalOpen(false);
+        setNewPlan({
+          title: '',
+          description: '',
+          duration: '4',
+          level: 'beginner',
+          goal: 'general_fitness',
+          frequency: 3,
+          exercises: [],
+          image: '',
+        });
+        
+        updateToast(toastId, 'Workout plan created successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to create workout plan');
+      }
+      
+      setSaving(false);
+    } catch (error) {
+      setSaving(false);
+      updateToast(toastId, 'Failed to create workout plan', 'error');
+      console.error('Error creating workout plan:', error);
+    }
   };
 
-  const handleEditPlan = () => {
-    if (!selectedPlan) return;
-    setWorkoutPlans((prev) =>
-      prev.map((plan) => (plan.id === selectedPlan.id ? selectedPlan : plan))
-    );
-    setIsEditModalOpen(false);
-    setSelectedPlan(null);
+  const handleEditPlan = async () => {
+    if (!selectedPlan || !gymId) {
+      showError('No workout plan selected or gym associated with this account');
+      return;
+    }
+    
+    const toastId = showLoading('Updating workout plan...');
+    setSaving(true);
+    
+    try {
+      // Prepare workout plan for API
+      const planData = {
+        title: selectedPlan.title,
+        description: selectedPlan.description,
+        exercises: selectedPlan.exercises.map(ex => ({
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          restTime: parseInt(ex.restTime),
+          duration: ex.duration || 0,
+          instructions: ex.instructions || '',
+          targetMuscleGroup: ex.targetMuscleGroup || ''
+        })),
+        duration: parseInt(selectedPlan.duration),
+        level: selectedPlan.level,
+        goal: selectedPlan.goal,
+        frequency: selectedPlan.frequency,
+        gymId: gymId,
+        isTemplate: true
+      };
+      
+      // Call API to update workout plan
+      const response = await fetch(`/api/workout-plans/${selectedPlan.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(planData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update workout plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state
+        setWorkoutPlans((prev) =>
+          prev.map((plan) => (plan.id === selectedPlan.id ? selectedPlan : plan))
+        );
+        
+        setIsEditModalOpen(false);
+        setSelectedPlan(null);
+        
+        updateToast(toastId, 'Workout plan updated successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to update workout plan');
+      }
+      
+      setSaving(false);
+    } catch (error) {
+      setSaving(false);
+      updateToast(toastId, 'Failed to update workout plan', 'error');
+      console.error('Error updating workout plan:', error);
+    }
   };
 
-  const handleDeletePlan = (id: string) => {
-    setWorkoutPlans((prev) => prev.filter((plan) => plan.id !== id));
+  const handleDeletePlan = async (id: string) => {
+    if (!gymId) {
+      showError('No gym associated with this account');
+      return;
+    }
+    
+    if (!confirm('Are you sure you want to delete this workout plan?')) {
+      return;
+    }
+    
+    const toastId = showLoading('Deleting workout plan...');
+    
+    try {
+      // Call API to delete workout plan
+      const response = await fetch(`/api/workout-plans/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete workout plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state
+        setWorkoutPlans((prev) => prev.filter((plan) => plan.id !== id));
+        
+        updateToast(toastId, 'Workout plan deleted successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to delete workout plan');
+      }
+    } catch (error) {
+      updateToast(toastId, 'Failed to delete workout plan', 'error');
+      console.error('Error deleting workout plan:', error);
+    }
   };
 
-  const getDifficultyColor = (difficulty: WorkoutPlan['difficulty']) => {
-    switch (difficulty) {
-      case 'Beginner':
+  const getLevelColor = (level: WorkoutPlan['level']) => {
+    switch (level) {
+      case 'beginner':
         return 'bg-green-100 text-green-800';
-      case 'Intermediate':
+      case 'intermediate':
         return 'bg-yellow-100 text-yellow-800';
-      case 'Advanced':
+      case 'advanced':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const getFormattedLevel = (level: string) => {
+    return level.charAt(0).toUpperCase() + level.slice(1);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -220,16 +437,16 @@ const WorkoutPlans = () => {
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <Target className="w-4 h-4 mr-2" />
-                  {plan.targetMuscle}
+                  {plan.goal}
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <Dumbbell className="w-4 h-4 mr-2" />
                   <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${getDifficultyColor(
-                      plan.difficulty
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${getLevelColor(
+                      plan.level
                     )}`}
                   >
-                    {plan.difficulty}
+                    {getFormattedLevel(plan.level)}
                   </span>
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
@@ -311,32 +528,48 @@ const WorkoutPlans = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Difficulty
+                  Level
                 </label>
                 <select
-                  value={newPlan.difficulty}
+                  value={newPlan.level}
                   onChange={(e) =>
                     setNewPlan({
                       ...newPlan,
-                      difficulty: e.target.value as WorkoutPlan['difficulty'],
+                      level: e.target.value as WorkoutPlan['level'],
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 >
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Target Muscle
+                  Goal
                 </label>
                 <input
                   type="text"
-                  value={newPlan.targetMuscle}
+                  value={newPlan.goal}
                   onChange={(e) =>
-                    setNewPlan({ ...newPlan, targetMuscle: e.target.value })
+                    setNewPlan({ ...newPlan, goal: e.target.value })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Frequency
+                </label>
+                <input
+                  type="number"
+                  value={newPlan.frequency}
+                  onChange={(e) =>
+                    setNewPlan({
+                      ...newPlan,
+                      frequency: parseInt(e.target.value),
+                    })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 />
@@ -412,11 +645,11 @@ const WorkoutPlans = () => {
                     Description
                   </label>
                   <textarea
-                    value={newExercise.description}
+                    value={newExercise.instructions}
                     onChange={(e) =>
                       setNewExercise({
                         ...newExercise,
-                        description: e.target.value,
+                        instructions: e.target.value,
                       })
                     }
                     rows={2}
@@ -525,34 +758,34 @@ const WorkoutPlans = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Difficulty
+                  Level
                 </label>
                 <select
-                  value={selectedPlan.difficulty}
+                  value={selectedPlan.level}
                   onChange={(e) =>
                     setSelectedPlan({
                       ...selectedPlan,
-                      difficulty: e.target.value as WorkoutPlan['difficulty'],
+                      level: e.target.value as WorkoutPlan['level'],
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 >
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Target Muscle
+                  Goal
                 </label>
                 <input
                   type="text"
-                  value={selectedPlan.targetMuscle}
+                  value={selectedPlan.goal}
                   onChange={(e) =>
                     setSelectedPlan({
                       ...selectedPlan,
-                      targetMuscle: e.target.value,
+                      goal: e.target.value,
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"

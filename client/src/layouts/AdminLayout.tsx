@@ -1,141 +1,124 @@
-import { useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import ResponsiveSidebarLayout, { useSidebar } from '../components/DynamicSidebar';
 import {
-  LayoutDashboard,
-  Building2,
-  DollarSign,
-  Package,
-  Settings,
+  Bell,
+  Search,
   Menu,
-  X,
-  LogOut
+  X
 } from 'lucide-react';
 
-interface NavItem {
-  title: string;
-  path: string;
-  icon: React.ReactNode;
-}
+const AdminHeader = () => {
+  const { user } = useAuth();
+  const { toggleMobile, isSearchOpen, setIsSearchOpen, isNotificationsOpen, setIsNotificationsOpen } = useSidebar();
 
-const navItems: NavItem[] = [
-  {
-    title: 'Dashboard',
-    path: '/admin/dashboard',
-    icon: <LayoutDashboard className="w-5 h-5" />
-  },
-  {
-    title: 'Gym Management',
-    path: '/admin/gym-management',
-    icon: <Building2 className="w-5 h-5" />
-  },
-  {
-    title: 'Sales & Payments',
-    path: '/admin/sales',
-    icon: <DollarSign className="w-5 h-5" />
-  },
-  {
-    title: 'Product Listing',
-    path: '/admin/products',
-    icon: <Package className="w-5 h-5" />
-  },
-  {
-    title: 'Settings',
-    path: '/admin/settings',
-    icon: <Settings className="w-5 h-5" />
-  }
-];
+  // Toggle notifications dropdown
+  const toggleNotifications = () => {
+    setIsNotificationsOpen(!isNotificationsOpen);
+    if (isSearchOpen) setIsSearchOpen(false);
+  };
 
-const AdminLayout = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const location = useLocation();
+  // Toggle search bar
+  const toggleSearch = () => {
+    setIsSearchOpen(!isSearchOpen);
+    if (isNotificationsOpen) setIsNotificationsOpen(false);
+  };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed lg:static inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 transition-transform duration-200 ease-in-out`}
-      >
-        <div className="flex flex-col h-full">
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary-500 rounded-lg" />
-              <span className="text-xl font-semibold text-gray-900">Admin Panel</span>
-            </div>
-            <button
-              className="lg:hidden text-gray-500 hover:text-gray-700"
-              onClick={() => setIsSidebarOpen(false)}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg ${
-                  location.pathname === item.path
-                    ? 'bg-primary-50 text-primary-600'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {item.icon}
-                <span className="ml-3">{item.title}</span>
-              </Link>
-            ))}
-          </nav>
-
-          {/* Sidebar Footer */}
-          <div className="p-4 border-t border-gray-200">
-            <button className="flex items-center w-full px-4 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-100">
-              <LogOut className="w-5 h-5" />
-              <span className="ml-3">Logout</span>
-            </button>
+    <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center">
+          <button
+            className="lg:hidden p-2 mr-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-150"
+            onClick={toggleMobile}
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          {/* Search Bar - Shows on larger screens or when toggled on mobile */}
+          <div className={`${isSearchOpen ? 'flex' : 'hidden md:flex'} items-center w-full md:w-64 lg:w-96 relative`}>
+            <input 
+              type="text" 
+              placeholder="Search..." 
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+            />
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
           </div>
         </div>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Navigation */}
-        <header className="bg-white border-b border-gray-200">
-          <div className="flex items-center justify-between px-4 py-3">
-            <button
-              className="lg:hidden text-gray-500 hover:text-gray-700"
-              onClick={() => setIsSidebarOpen(true)}
+        
+        <div className="flex items-center space-x-4">
+          {/* Mobile search toggle */}
+          <button 
+            className="md:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-150"
+            onClick={toggleSearch}
+          >
+            <Search className="w-5 h-5" />
+          </button>
+          
+          {/* Notifications */}
+          <div className="relative">
+            <button 
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-150"
+              onClick={toggleNotifications}
             >
-              <Menu className="w-5 h-5" />
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
-                  <span className="text-primary-600 font-semibold">SA</span>
+            
+            {/* Notifications Dropdown */}
+            {isNotificationsOpen && (
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg ring-1 ring-black ring-opacity-5 py-1 z-10 transition transform origin-top-right">
+                <div className="px-4 py-2 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  <div className="px-4 py-3 hover:bg-gray-50 transition-colors duration-150">
+                    <p className="text-sm font-medium text-gray-900">New gym registration</p>
+                    <p className="text-xs text-gray-500 mt-1">A new gym has requested approval</p>
+                    <p className="text-xs text-gray-400 mt-2">5 minutes ago</p>
+                  </div>
+                  <div className="px-4 py-3 hover:bg-gray-50 transition-colors duration-150">
+                    <p className="text-sm font-medium text-gray-900">Payment received</p>
+                    <p className="text-xs text-gray-500 mt-1">Monthly subscription payment processed</p>
+                    <p className="text-xs text-gray-400 mt-2">2 hours ago</p>
+                  </div>
+                </div>
+                <div className="px-4 py-2 border-t border-gray-200">
+                  <a href="#" className="text-xs font-medium text-primary-600 hover:text-primary-500">View all notifications</a>
                 </div>
               </div>
+            )}
+          </div>
+          
+          {/* User Profile */}
+          <div className="relative">
+            <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center">
+              <span className="text-primary-600 font-semibold">
+                {user?.name?.charAt(0) || (user?.role === 'superadmin' ? 'S' : 'A')}
+              </span>
             </div>
           </div>
-        </header>
-
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4">
-          <Outlet />
-        </main>
+        </div>
       </div>
-    </div>
+    </header>
   );
 };
 
-export default AdminLayout; 
+const AdminLayout = () => {
+  return (
+    <ResponsiveSidebarLayout>
+      <div className="flex flex-col min-h-screen w-full">
+        <AdminHeader />
+        
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </ResponsiveSidebarLayout>
+  );
+};
+
+export default AdminLayout;

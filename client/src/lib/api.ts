@@ -33,6 +33,14 @@ interface ErrorResponse {
   errors?: Record<string, string[]>;
 }
 
+// Event for session expiry
+const dispatchAuthExpiredEvent = (reason = 'Your session has expired. Please log in again.') => {
+  const event = new CustomEvent('auth-expired', { 
+    detail: { reason } 
+  });
+  window.dispatchEvent(event);
+};
+
 // Token management
 export const getTokens = (): AuthTokens | null => {
   const accessToken = localStorage.getItem('accessToken');
@@ -78,12 +86,19 @@ api.interceptors.response.use(
     
     // Handle 401 errors (unauthorized) - could be expired token
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Mark this request as retried to prevent infinite retry loops
       originalRequest._retry = true;
       
       const refreshToken = localStorage.getItem('refreshToken');
+      const errorMsg = error.response?.data?.message || 'Session expired';
       
-      if (refreshToken) {
+      // Don't attempt to refresh if it's a direct auth endpoint failure
+      const isAuthEndpoint = originalRequest.url?.includes('/auth/');
+      
+      if (refreshToken && !isAuthEndpoint) {
         try {
+          console.log('Attempting to refresh token...');
+          
           // Attempt to refresh the token
           const response = await axios.post(`${API_BASE_URL}/auth/refresh-token`, { 
             refreshToken 
@@ -91,24 +106,46 @@ api.interceptors.response.use(
           
           const { token } = response.data;
           
+          if (!token) {
+            throw new Error('No token received from refresh endpoint');
+          }
+          
+          console.log('Token refreshed successfully');
+          
           // Update stored tokens
           setTokens({ accessToken: token, refreshToken: token });
           
-          // Update authorization header and retry request
+          // Update authorization header for this and future requests
           api.defaults.headers.common.Authorization = `Bearer ${token}`;
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          
+          // Retry the original request with new token
           return api(originalRequest);
         } catch (refreshError) {
-          // If refresh fails, log out the user
+          console.error('Token refresh failed:', refreshError);
+          
+          // Clear tokens
           removeTokens();
-          // Optional: Redirect to login
-          window.location.href = '/login';
+          
+          // Dispatch auth expired event to trigger logout in auth context
+          dispatchAuthExpiredEvent('Your session has expired. Please log in again.');
+          
           return Promise.reject(refreshError);
         }
       } else {
-        // No refresh token available
+        // No refresh token or auth endpoint failure
+        // Clear tokens
         removeTokens();
-        // Optional: Redirect to login
-        window.location.href = '/login';
+        
+        // For auth endpoints, just reject normally (don't redirect from login page)
+        if (isAuthEndpoint) {
+          return Promise.reject(error);
+        }
+        
+        // Dispatch auth expired event to trigger logout in auth context
+        dispatchAuthExpiredEvent(errorMsg);
+        
+        return Promise.reject(new Error(errorMsg));
       }
     }
     
@@ -121,7 +158,6 @@ api.interceptors.response.use(
 export const apiRequest = async (options) => {
   try {
     const response = await api(options);
-    // Return the response data directly since the backend doesn't nest it inside a data property
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -155,4 +191,4 @@ export const apiMethods = {
     apiRequest({ ...config, method: 'DELETE', url }),
 };
 
-export default api; 
+export default api;

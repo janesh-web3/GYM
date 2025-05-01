@@ -1,93 +1,62 @@
-import { useState } from 'react';
-import { Plus, Edit2, Trash2, Clock, Utensils, Target, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Clock, Utensils, Target, Users, Loader } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { showSuccess, showError, showLoading, updateToast } from '../../utils/toast';
+import { gymService } from '../../lib/services';
 
-interface Meal {
-  id: string;
+interface Food {
   name: string;
+  quantity: string;
   calories: number;
   protein: number;
   carbs: number;
   fats: number;
-  description: string;
+}
+
+interface Meal {
+  id: string;
+  name: string;
   time: string;
+  description: string;
+  foods: Food[];
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
 }
 
 interface DietPlan {
   id: string;
   title: string;
   description: string;
-  duration: string;
-  goal: 'Weight Loss' | 'Muscle Gain' | 'Maintenance';
-  targetCalories: number;
+  duration: number;
+  goal: string;
+  calories: number;
   meals: Meal[];
-  image: string;
+  restrictions: string[];
+  macros: {
+    protein: number;
+    carbs: number;
+    fats: number;
+  };
+  image?: string;
+  gymId?: string;
+  createdBy?: string;
+}
+
+interface GymResponse {
+  _id: string;
+  name: string;
+  [key: string]: any;
 }
 
 const DietPlans = () => {
-  const [dietPlans, setDietPlans] = useState<DietPlan[]>([
-    {
-      id: '1',
-      title: 'Weight Loss Plan',
-      description: 'A balanced diet plan focused on healthy weight loss.',
-      duration: '4 weeks',
-      goal: 'Weight Loss',
-      targetCalories: 1800,
-      image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061',
-      meals: [
-        {
-          id: '1',
-          name: 'Breakfast',
-          calories: 400,
-          protein: 25,
-          carbs: 45,
-          fats: 15,
-          description: 'Oatmeal with berries and nuts',
-          time: '8:00 AM',
-        },
-        {
-          id: '2',
-          name: 'Lunch',
-          calories: 500,
-          protein: 30,
-          carbs: 50,
-          fats: 20,
-          description: 'Grilled chicken with quinoa and vegetables',
-          time: '12:30 PM',
-        },
-      ],
-    },
-    {
-      id: '2',
-      title: 'Muscle Gain Plan',
-      description: 'High protein diet plan for muscle building.',
-      duration: '8 weeks',
-      goal: 'Muscle Gain',
-      targetCalories: 2500,
-      image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061',
-      meals: [
-        {
-          id: '1',
-          name: 'Breakfast',
-          calories: 600,
-          protein: 40,
-          carbs: 60,
-          fats: 20,
-          description: 'Protein pancakes with eggs and avocado',
-          time: '8:00 AM',
-        },
-        {
-          id: '2',
-          name: 'Lunch',
-          calories: 700,
-          protein: 50,
-          carbs: 70,
-          fats: 25,
-          description: 'Beef steak with sweet potato and greens',
-          time: '12:30 PM',
-        },
-      ],
-    },
-  ]);
+  const { user } = useAuth();
+  const [gymId, setGymId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  
+  const [dietPlans, setDietPlans] = useState<DietPlan[]>([]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -96,86 +65,351 @@ const DietPlans = () => {
   const [newPlan, setNewPlan] = useState<Omit<DietPlan, 'id'>>({
     title: '',
     description: '',
-    duration: '',
-    goal: 'Weight Loss',
-    targetCalories: 0,
+    duration: 4,
+    goal: 'weight_loss',
+    calories: 2000,
     meals: [],
+    restrictions: [],
+    macros: {
+      protein: 30,
+      carbs: 40,
+      fats: 30
+    },
     image: '',
   });
 
   const [newMeal, setNewMeal] = useState<Omit<Meal, 'id'>>({
     name: '',
+    time: '',
+    description: '',
+    foods: [],
     calories: 0,
     protein: 0,
     carbs: 0,
-    fats: 0,
-    description: '',
-    time: '',
+    fats: 0
   });
 
+  useEffect(() => {
+    const fetchDietPlans = async () => {
+      try {
+        setLoading(true);
+        // In a real app, we'd fetch the gym ID associated with this owner
+        const gyms = await gymService.getAllGyms() as GymResponse[];
+        if (gyms && gyms.length > 0) {
+          const gymId = gyms[0]._id;
+          setGymId(gymId);
+          
+          // Fetch diet plans from API
+          const response = await fetch(`/api/diet-plans?gymId=${gymId}`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch diet plans');
+          }
+          
+          const data = await response.json();
+          if (data.success && data.data) {
+            setDietPlans(data.data.map((plan: any) => ({
+              id: plan._id,
+              title: plan.title,
+              description: plan.description,
+              duration: plan.duration,
+              goal: plan.goal,
+              calories: plan.calories,
+              restrictions: plan.restrictions || [],
+              macros: plan.macros,
+              meals: plan.meals.map((meal: any) => ({
+                id: meal._id,
+                name: meal.name,
+                time: meal.time,
+                description: meal.description,
+                foods: meal.foods,
+                calories: meal.totalCalories,
+                protein: meal.foods.reduce((total: number, food: any) => total + food.protein, 0),
+                carbs: meal.foods.reduce((total: number, food: any) => total + food.carbs, 0),
+                fats: meal.foods.reduce((total: number, food: any) => total + food.fats, 0)
+              })),
+              image: plan.image || 'https://images.unsplash.com/photo-1490645935967-10de6ba17061',
+              gymId: plan.gymId,
+              createdBy: plan.createdBy
+            })));
+          }
+        }
+        setLoading(false);
+      } catch (error) {
+        setLoading(false);
+        showError('Failed to load diet plans');
+        console.error('Error fetching diet plans:', error);
+      }
+    };
+    
+    if (user) {
+      fetchDietPlans();
+    }
+  }, [user]);
+
   const handleAddMeal = () => {
+    if (!newMeal.name) {
+      showError('Please provide a meal name');
+      return;
+    }
+    
     const meal: Meal = {
       ...newMeal,
       id: Date.now().toString(),
     };
+    
     setNewPlan((prev) => ({
       ...prev,
       meals: [...prev.meals, meal],
     }));
+    
     setNewMeal({
       name: '',
+      time: '',
+      description: '',
+      foods: [],
       calories: 0,
       protein: 0,
       carbs: 0,
-      fats: 0,
-      description: '',
-      time: '',
+      fats: 0
     });
   };
 
-  const handleAddPlan = () => {
-    const plan: DietPlan = {
-      ...newPlan,
-      id: Date.now().toString(),
-    };
-    setDietPlans((prev) => [...prev, plan]);
-    setIsAddModalOpen(false);
-    setNewPlan({
-      title: '',
-      description: '',
-      duration: '',
-      goal: 'Weight Loss',
-      targetCalories: 0,
-      meals: [],
-      image: '',
-    });
+  const handleAddPlan = async () => {
+    if (!gymId) {
+      showError('No gym associated with this account');
+      return;
+    }
+    
+    if (!newPlan.title || newPlan.calories <= 0 || newPlan.meals.length === 0) {
+      showError('Please fill all required fields and add at least one meal');
+      return;
+    }
+    
+    const toastId = showLoading('Creating diet plan...');
+    setSaving(true);
+    
+    try {
+      // Prepare diet plan for API
+      const planData = {
+        title: newPlan.title,
+        description: newPlan.description,
+        duration: newPlan.duration,
+        goal: newPlan.goal,
+        calories: newPlan.calories,
+        meals: newPlan.meals.map(meal => ({
+          name: meal.name,
+          time: meal.time,
+          description: meal.description,
+          foods: meal.foods,
+          totalCalories: meal.calories
+        })),
+        restrictions: newPlan.restrictions,
+        macros: newPlan.macros,
+        gymId: gymId,
+        isTemplate: true
+      };
+      
+      // Call API to create diet plan
+      const response = await fetch('/api/diet-plans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(planData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create diet plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        const createdPlan: DietPlan = {
+          id: data.data._id,
+          title: data.data.title,
+          description: data.data.description,
+          duration: data.data.duration,
+          goal: data.data.goal,
+          calories: data.data.calories,
+          restrictions: data.data.restrictions || [],
+          macros: data.data.macros,
+          meals: data.data.meals.map((meal: any) => ({
+            id: meal._id,
+            name: meal.name,
+            time: meal.time,
+            description: meal.description,
+            foods: meal.foods,
+            calories: meal.totalCalories,
+            protein: meal.foods.reduce((total: number, food: any) => total + food.protein, 0),
+            carbs: meal.foods.reduce((total: number, food: any) => total + food.carbs, 0),
+            fats: meal.foods.reduce((total: number, food: any) => total + food.fats, 0)
+          })),
+          image: newPlan.image || 'https://images.unsplash.com/photo-1490645935967-10de6ba17061',
+          gymId: data.data.gymId,
+          createdBy: data.data.createdBy
+        };
+        
+        setDietPlans((prev) => [...prev, createdPlan]);
+        setIsAddModalOpen(false);
+        setNewPlan({
+          title: '',
+          description: '',
+          duration: 4,
+          goal: 'weight_loss',
+          calories: 2000,
+          meals: [],
+          restrictions: [],
+          macros: {
+            protein: 30,
+            carbs: 40,
+            fats: 30
+          },
+          image: '',
+        });
+        
+        updateToast(toastId, 'Diet plan created successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to create diet plan');
+      }
+      
+      setSaving(false);
+    } catch (error) {
+      setSaving(false);
+      updateToast(toastId, 'Failed to create diet plan', 'error');
+      console.error('Error creating diet plan:', error);
+    }
   };
 
-  const handleEditPlan = () => {
-    if (!selectedPlan) return;
-    setDietPlans((prev) =>
-      prev.map((plan) => (plan.id === selectedPlan.id ? selectedPlan : plan))
-    );
-    setIsEditModalOpen(false);
-    setSelectedPlan(null);
+  const handleEditPlan = async () => {
+    if (!selectedPlan || !gymId) {
+      showError('No diet plan selected or gym associated with this account');
+      return;
+    }
+    
+    const toastId = showLoading('Updating diet plan...');
+    setSaving(true);
+    
+    try {
+      // Prepare diet plan for API
+      const planData = {
+        title: selectedPlan.title,
+        description: selectedPlan.description,
+        duration: selectedPlan.duration,
+        goal: selectedPlan.goal,
+        calories: selectedPlan.calories,
+        meals: selectedPlan.meals.map(meal => ({
+          name: meal.name,
+          time: meal.time,
+          description: meal.description,
+          foods: meal.foods,
+          totalCalories: meal.calories
+        })),
+        restrictions: selectedPlan.restrictions,
+        macros: selectedPlan.macros,
+        gymId: gymId,
+        isTemplate: true
+      };
+      
+      // Call API to update diet plan
+      const response = await fetch(`/api/diet-plans/${selectedPlan.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(planData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update diet plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state
+        setDietPlans((prev) =>
+          prev.map((plan) => (plan.id === selectedPlan.id ? selectedPlan : plan))
+        );
+        
+        setIsEditModalOpen(false);
+        setSelectedPlan(null);
+        
+        updateToast(toastId, 'Diet plan updated successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to update diet plan');
+      }
+      
+      setSaving(false);
+    } catch (error) {
+      setSaving(false);
+      updateToast(toastId, 'Failed to update diet plan', 'error');
+      console.error('Error updating diet plan:', error);
+    }
   };
 
-  const handleDeletePlan = (id: string) => {
-    setDietPlans((prev) => prev.filter((plan) => plan.id !== id));
+  const handleDeletePlan = async (id: string) => {
+    if (!gymId) {
+      showError('No gym associated with this account');
+      return;
+    }
+    
+    if (!confirm('Are you sure you want to delete this diet plan?')) {
+      return;
+    }
+    
+    const toastId = showLoading('Deleting diet plan...');
+    
+    try {
+      // Call API to delete diet plan
+      const response = await fetch(`/api/diet-plans/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete diet plan');
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state
+        setDietPlans((prev) => prev.filter((plan) => plan.id !== id));
+        
+        updateToast(toastId, 'Diet plan deleted successfully!', 'success');
+      } else {
+        throw new Error(data.message || 'Failed to delete diet plan');
+      }
+    } catch (error) {
+      updateToast(toastId, 'Failed to delete diet plan', 'error');
+      console.error('Error deleting diet plan:', error);
+    }
   };
 
-  const getGoalColor = (goal: DietPlan['goal']) => {
+  const getGoalColor = (goal: string) => {
     switch (goal) {
-      case 'Weight Loss':
+      case 'weight_loss':
         return 'bg-green-100 text-green-800';
-      case 'Muscle Gain':
+      case 'muscle_gain':
         return 'bg-blue-100 text-blue-800';
-      case 'Maintenance':
+      case 'maintenance':
         return 'bg-yellow-100 text-yellow-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const getFormattedGoal = (goal: string) => {
+    return goal.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader className="w-8 h-8 animate-spin text-primary-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -230,7 +464,7 @@ const DietPlans = () => {
               <div className="space-y-2">
                 <div className="flex items-center text-sm text-gray-600">
                   <Clock className="w-4 h-4 mr-2" />
-                  {plan.duration}
+                  {plan.duration} weeks
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <Target className="w-4 h-4 mr-2" />
@@ -239,12 +473,12 @@ const DietPlans = () => {
                       plan.goal
                     )}`}
                   >
-                    {plan.goal}
+                    {getFormattedGoal(plan.goal)}
                   </span>
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <Utensils className="w-4 h-4 mr-2" />
-                  {plan.targetCalories} calories/day
+                  {plan.calories} calories/day
                 </div>
                 <div className="flex items-center text-sm text-gray-600">
                   <Users className="w-4 h-4 mr-2" />
@@ -315,10 +549,10 @@ const DietPlans = () => {
                   Duration
                 </label>
                 <input
-                  type="text"
+                  type="number"
                   value={newPlan.duration}
                   onChange={(e) =>
-                    setNewPlan({ ...newPlan, duration: e.target.value })
+                    setNewPlan({ ...newPlan, duration: parseInt(e.target.value) })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 />
@@ -337,9 +571,9 @@ const DietPlans = () => {
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 >
-                  <option value="Weight Loss">Weight Loss</option>
-                  <option value="Muscle Gain">Muscle Gain</option>
-                  <option value="Maintenance">Maintenance</option>
+                  <option value="weight_loss">Weight Loss</option>
+                  <option value="muscle_gain">Muscle Gain</option>
+                  <option value="maintenance">Maintenance</option>
                 </select>
               </div>
               <div>
@@ -348,11 +582,11 @@ const DietPlans = () => {
                 </label>
                 <input
                   type="number"
-                  value={newPlan.targetCalories}
+                  value={newPlan.calories}
                   onChange={(e) =>
                     setNewPlan({
                       ...newPlan,
-                      targetCalories: parseInt(e.target.value),
+                      calories: parseInt(e.target.value),
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
@@ -558,12 +792,12 @@ const DietPlans = () => {
                   Duration
                 </label>
                 <input
-                  type="text"
+                  type="number"
                   value={selectedPlan.duration}
                   onChange={(e) =>
                     setSelectedPlan({
                       ...selectedPlan,
-                      duration: e.target.value,
+                      duration: parseInt(e.target.value),
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
@@ -583,9 +817,9 @@ const DietPlans = () => {
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 >
-                  <option value="Weight Loss">Weight Loss</option>
-                  <option value="Muscle Gain">Muscle Gain</option>
-                  <option value="Maintenance">Maintenance</option>
+                  <option value="weight_loss">Weight Loss</option>
+                  <option value="muscle_gain">Muscle Gain</option>
+                  <option value="maintenance">Maintenance</option>
                 </select>
               </div>
               <div>
@@ -594,11 +828,11 @@ const DietPlans = () => {
                 </label>
                 <input
                   type="number"
-                  value={selectedPlan.targetCalories}
+                  value={selectedPlan.calories}
                   onChange={(e) =>
                     setSelectedPlan({
                       ...selectedPlan,
-                      targetCalories: parseInt(e.target.value),
+                      calories: parseInt(e.target.value),
                     })
                   }
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"

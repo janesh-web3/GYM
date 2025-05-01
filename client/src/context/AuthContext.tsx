@@ -68,6 +68,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const navigate = useNavigate();
 
+  // Handle session expiry
+  useEffect(() => {
+    // Create a custom event for auth expiration that can be triggered from anywhere
+    const handleAuthExpired = (event: CustomEvent) => {
+      const reason = event.detail?.reason || 'Session expired';
+      handleLogout(reason);
+    };
+
+    // Listen for the auth expired event
+    window.addEventListener('auth-expired' as any, handleAuthExpired);
+    
+    // Clean up event listener
+    return () => {
+      window.removeEventListener('auth-expired' as any, handleAuthExpired);
+    };
+  }, [navigate]);
+
   // Check if user is already logged in on mount
   useEffect(() => {
     const loadUser = async () => {
@@ -78,8 +95,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
         
+        // Fetch current user data from the /api/auth/me endpoint
         const userData = await authService.getCurrentUser() as UserData;
         console.log('Current user data:', userData);
+        
+        if (!userData || !userData._id) {
+          // Invalid user data
+          removeTokens();
+          setAuthState({
+            isAuthenticated: false,
+            user: null,
+            loading: false,
+            error: 'Session expired or invalid'
+          });
+          return;
+        }
         
         // Format the user data to match our User interface
         const user = {
@@ -96,8 +126,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           error: null
         });
         
-        // Show welcome back toast
-        showSuccess(`Welcome back, ${user.name}!`);
+        // Show welcome back toast only if navigating to the app
+        if (!window.location.pathname.includes('login') && !window.location.pathname.includes('signup')) {
+          showSuccess(`Welcome back, ${user.name}!`);
+        }
       } catch (error) {
         console.error('Authentication error:', error);
         // Token might be invalid or expired
@@ -241,17 +273,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Logout the user
-  const logout = () => {
+  // Enhanced logout function
+  const handleLogout = (message?: string) => {
+    // Clear all auth tokens
     removeTokens();
+    
+    // Reset auth state
     setAuthState({
       isAuthenticated: false,
       user: null,
       loading: false,
       error: null
     });
-    showSuccess('You have been logged out');
+    
+    // Show notification based on message
+    if (message) {
+      showError(message);
+    } else {
+      showSuccess('You have been logged out');
+    }
+    
+    // Navigate to login page
     navigate('/login');
+  };
+  
+  // Public logout method
+  const logout = () => {
+    handleLogout();
   };
 
   // Clear any auth errors

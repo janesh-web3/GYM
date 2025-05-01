@@ -1,15 +1,11 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Navbar from "./components/Navbar";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ExploreGyms from "./pages/ExploreGyms";
-import GymLayout from "./layouts/GymLayout";
-import MemberLayout from "./layouts/MemberLayout";
-import TrainerLayout from "./layouts/TrainerLayout";
-import AdminLayout from "./layouts/AdminLayout";
+import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/gym/Dashboard";
 import EditProfile from "./pages/gym/EditProfile";
 import UploadMedia from "./pages/gym/UploadMedia";
@@ -49,17 +45,20 @@ import Settings from "./pages/admin/Settings";
 const AppRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/explore" element={<ExploreGyms />} />
+      {/* Public Routes */}
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/explore" element={<ExploreGyms />} />
+      </Route>
 
       {/* Gym Owner Routes */}
       <Route
         path="/gym"
         element={<ProtectedRoute allowedRoles={["gymOwner"]} />}
       >
-        <Route element={<GymLayout />}>
+        <Route element={<AppLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="edit-profile" element={<EditProfile />} />
@@ -79,7 +78,7 @@ const AppRoutes = () => {
         path="/member"
         element={<ProtectedRoute allowedRoles={["member"]} />}
       >
-        <Route element={<MemberLayout />}>
+        <Route element={<AppLayout />}>
           <Route index element={<MemberDashboard />} />
           <Route path="dashboard" element={<MemberDashboard />} />
           <Route path="workout-plans" element={<MemberWorkoutPlans />} />
@@ -96,7 +95,7 @@ const AppRoutes = () => {
         path="/trainer"
         element={<ProtectedRoute allowedRoles={["trainer"]} />}
       >
-        <Route element={<TrainerLayout />}>
+        <Route element={<AppLayout />}>
           <Route index element={<TrainerDashboard />} />
           <Route path="dashboard" element={<TrainerDashboard />} />
           <Route path="members" element={<TrainerMembers />} />
@@ -111,7 +110,7 @@ const AppRoutes = () => {
         path="/admin"
         element={<ProtectedRoute allowedRoles={["admin"]} />}
       >
-        <Route element={<AdminLayout />}>
+        <Route element={<AppLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="gym-management" element={<GymManagement />} />
@@ -121,13 +120,12 @@ const AppRoutes = () => {
         </Route>
       </Route>
 
-
-      {/* Admin Routes */}
+      {/* SuperAdmin Routes */}
       <Route
         path="/superadmin"
         element={<ProtectedRoute allowedRoles={["superadmin"]} />}
       >
-        <Route element={<AdminLayout />}>
+        <Route element={<AppLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="gym-management" element={<GymManagement />} />
@@ -136,8 +134,6 @@ const AppRoutes = () => {
           <Route path="settings" element={<Settings />} />
         </Route>
       </Route>
-
-
     </Routes>
   );
 };
@@ -146,23 +142,20 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <AppRoutes />
-          <ToastContainer
-            position="top-right"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="light"
-            aria-label="Notifications"
-          />
-        </div>
+        <AppRoutes />
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+          aria-label="Notifications"
+        />
       </AuthProvider>
     </Router>
   );

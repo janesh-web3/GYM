@@ -92,5 +92,23 @@ export const login = async (req, res) => {
 // @route   GET /api/auth/me
 // @access  Private
 export const getMe = async (req, res) => {
-  res.json(req.user);
+  try {
+    // User is already available in req.user from the protect middleware
+    // Remove sensitive information 
+    const user = {
+      _id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      status: req.user.status,
+      // Include any other non-sensitive fields that frontend needs
+      createdAt: req.user.createdAt,
+      updatedAt: req.user.updatedAt
+    };
+    
+    res.json(user);
+  } catch (error) {
+    console.error('Error in getMe:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 }; 

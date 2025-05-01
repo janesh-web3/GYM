@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types/Role';
+import { isAuthenticated as checkAuth, isTokenExpired, forceLogout } from '../utils/auth';
 
 interface ProtectedRouteProps {
   allowedRoles?: Role[];
@@ -9,6 +10,27 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
   const { isAuthenticated, user, loading } = useAuth();
   const location = useLocation();
+
+  // Additional token validation
+  const performTokenCheck = () => {
+    // Get the token from localStorage
+    const token = localStorage.getItem('accessToken');
+    
+    // If we have a token but it's expired, force logout
+    if (token && isTokenExpired(token)) {
+      forceLogout('Your session has expired. Please log in again.');
+      return false;
+    }
+    
+    // If we say we're authenticated but there's no token, something's wrong
+    if (isAuthenticated && !token) {
+      forceLogout('Authentication error. Please log in again.');
+      return false;
+    }
+    
+    // Otherwise, use the auth context value
+    return isAuthenticated;
+  };
 
   // If still loading, show nothing or a spinner
   if (loading) {
@@ -19,8 +41,11 @@ const ProtectedRoute = ({ allowedRoles }: ProtectedRouteProps) => {
     );
   }
 
+  // Perform additional token validation
+  const userIsAuthenticated = performTokenCheck();
+
   // If not authenticated, redirect to login
-  if (!isAuthenticated) {
+  if (!userIsAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
