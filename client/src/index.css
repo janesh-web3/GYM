@@ -17,6 +17,13 @@
   }
 }
 
+/* Custom responsive breakpoint */
+@media (min-width: 475px) {
+  .xs\:block {
+    display: block;
+  }
+}
+
 /* Custom component classes */
 @layer components {
   /* Button Variants */

@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, createContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types/Role';
@@ -39,100 +39,45 @@ import {
   MessageCircle
 } from 'lucide-react';
 
+// Create Sidebar Context
+interface SidebarContextProps {
+  isCollapsed: boolean;
+  setIsCollapsed: (value: boolean) => void;
+  isMobileOpen: boolean;
+  setIsMobileOpen: (value: boolean) => void;
+}
+
+const SidebarContext = createContext<SidebarContextProps | undefined>(undefined);
+
+export const useSidebar = () => {
+  const context = useContext(SidebarContext);
+  if (!context) {
+    throw new Error('useSidebar must be used within a SidebarProvider');
+  }
+  return context;
+};
+
+interface SidebarProviderProps {
+  children: ReactNode;
+}
+
+export const SidebarProvider = ({ children }: SidebarProviderProps) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  return (
+    <SidebarContext.Provider value={{ isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+};
+
 // Define types for navigation items
 interface NavItem {
   path: string;
   label: string;
   icon: React.ElementType;
 }
-
-// Define sidebar context type
-interface SidebarContextType {
-  isCollapsed: boolean;
-  isMobileOpen: boolean;
-  isSearchOpen: boolean;
-  isNotificationsOpen: boolean;
-  isProfileOpen: boolean;
-  toggleCollapse: () => void;
-  toggleMobile: () => void;
-  setIsSearchOpen: (isOpen: boolean) => void;
-  setIsNotificationsOpen: (isOpen: boolean) => void;
-  setIsProfileOpen: (isOpen: boolean) => void;
-}
-
-// Create sidebar context
-const SidebarContext = createContext<SidebarContextType>({
-  isCollapsed: false,
-  isMobileOpen: false,
-  isSearchOpen: false,
-  isNotificationsOpen: false,
-  isProfileOpen: false,
-  toggleCollapse: () => {},
-  toggleMobile: () => {},
-  setIsSearchOpen: () => {},
-  setIsNotificationsOpen: () => {},
-  setIsProfileOpen: () => {}
-});
-
-// Custom hook to use sidebar context
-export const useSidebar = () => useContext(SidebarContext);
-
-// Props for SidebarProvider
-interface SidebarProviderProps {
-  children: ReactNode;
-}
-
-// Sidebar Provider component
-export const SidebarProvider = ({ children }: SidebarProviderProps) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const location = useLocation();
-
-  // Close mobile sidebar when route changes
-  useEffect(() => {
-    setIsMobileOpen(false);
-  }, [location.pathname]);
-
-  // Set initial collapse state based on screen size
-  useEffect(() => {
-    const handleResize = () => {
-      setIsCollapsed(window.innerWidth < 1024);
-    };
-
-    // Set initial state
-    handleResize();
-
-    // Add event listener
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Toggle functions
-  const toggleCollapse = () => setIsCollapsed(!isCollapsed);
-  const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
-
-  return (
-    <SidebarContext.Provider 
-      value={{ 
-        isCollapsed, 
-        isMobileOpen, 
-        isSearchOpen,
-        isNotificationsOpen,
-        isProfileOpen,
-        toggleCollapse, 
-        toggleMobile,
-        setIsSearchOpen,
-        setIsNotificationsOpen,
-        setIsProfileOpen
-      }}
-    >
-      {children}
-    </SidebarContext.Provider>
-  );
-};
 
 // Generate menu items based on user role
 const getMenuItems = (role: Role): NavItem[] => {
@@ -186,53 +131,54 @@ const getMenuItems = (role: Role): NavItem[] => {
   }
 };
 
-// Sidebar component (without layout control)
-export const Sidebar = () => {
+const DynamicSidebar = () => {
   const { user, logout } = useAuth();
-  const { isCollapsed, isMobileOpen, toggleCollapse, toggleMobile } = useSidebar();
+  const { isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen } = useSidebar();
   const location = useLocation();
+
+  // Close mobile sidebar when route changes
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [location.pathname]);
 
   // If no user, don't render the sidebar
   if (!user) return null;
 
   const menuItems = getMenuItems(user.role);
   
+  // Handle mobile toggle
+  const toggleMobile = () => {
+    setIsMobileOpen(!isMobileOpen);
+  };
+
   // Base sidebar content
   const sidebarContent = (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between p-4 border-b border-zinc-700/20">
+    <>
+      <div className="flex items-center justify-between p-4 border-b">
         {!isCollapsed && (
-          <div className="flex items-center">
-            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">G</div>
-            <div className="ml-3">
-              <h1 className="text-xl font-bold text-slate-800">GymHub</h1>
-              <p className="text-xs text-slate-500 capitalize">{user.role} Portal</p>
-            </div>
-          </div>
-        )}
-        {isCollapsed && (
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold mx-auto">
-            G
+          <div>
+            <h1 className="text-xl font-bold text-primary-600">GymHub</h1>
+            <p className="text-xs text-gray-500 capitalize">{user.role} Portal</p>
           </div>
         )}
         <button
-          onClick={toggleCollapse}
-          className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 lg:block hidden"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="p-2 rounded-lg hover:bg-gray-100 lg:block hidden"
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? <Menu size={20} /> : <X size={20} />}
         </button>
         <button
           onClick={toggleMobile}
-          className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors duration-150 lg:hidden block"
+          className="p-2 rounded-lg hover:bg-gray-100 lg:hidden block"
           aria-label="Close sidebar"
         >
           <X size={20} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pt-2 pb-4">
-        <nav className="px-2 space-y-1">
+      <div className="overflow-y-auto flex-1">
+        <nav className="mt-4 px-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -241,114 +187,82 @@ export const Sidebar = () => {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center px-4 py-3 my-1 rounded-lg transition-colors ${
                   isActive 
-                    ? 'bg-indigo-50 text-indigo-600 shadow-sm' 
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'bg-primary-50 text-primary-600' 
+                    : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                <Icon size={20} className={`flex-shrink-0 ${isActive ? 'text-indigo-600' : 'text-slate-500'}`} />
-                {!isCollapsed && <span className="ml-3 truncate">{item.label}</span>}
+                <Icon size={20} className="flex-shrink-0" />
+                {!isCollapsed && <span className="ml-3">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
       </div>
 
-      <div className="mt-auto border-t border-zinc-200 p-4">
+      <div className="border-t p-4 mt-auto">
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!isCollapsed && (
-            <div className="flex items-center min-w-0">
-              <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-semibold flex-shrink-0">
-                {user.name?.charAt(0) || 'U'}
-              </div>
-              <div className="ml-3 truncate">
-                <p className="font-medium text-sm text-slate-900 truncate">{user.name}</p>
-                <p className="text-xs text-slate-500 truncate">{user.email}</p>
-              </div>
+            <div>
+              <p className="font-medium text-sm">{user.name}</p>
+              <p className="text-xs text-gray-500">{user.email}</p>
             </div>
           )}
           <button
             onClick={logout}
-            className={`p-2 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 ${isCollapsed ? '' : 'ml-2 flex-shrink-0'}`}
+            className={`text-gray-500 hover:text-red-500 p-2 rounded-lg ${isCollapsed ? '' : 'ml-2'}`}
             aria-label="Logout"
           >
             <LogOut size={20} />
           </button>
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  // Mobile sidebar trigger button (shown when sidebar is closed)
+  const mobileMenuTrigger = (
+    <button
+      onClick={toggleMobile}
+      className="fixed bottom-4 right-4 lg:hidden z-20 bg-primary-600 text-white p-3 rounded-full shadow-lg hover:bg-primary-700"
+      aria-label="Open menu"
+    >
+      <Menu size={24} />
+    </button>
   );
 
   return (
     <>
       {/* Desktop Sidebar */}
       <aside 
-        className={`bg-white h-screen border-r border-zinc-200 shadow-sm fixed top-0 left-0 z-30 hidden lg:block transition-all duration-300 ease-in-out ${
+        className={`bg-white h-screen transition-all duration-300 border-r fixed top-0 left-0 z-30 hidden lg:flex flex-col ${
           isCollapsed ? 'w-16' : 'w-64'
         }`}
       >
         {sidebarContent}
       </aside>
       
-      {/* Mobile Overlay */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ease-in-out"
-          onClick={toggleMobile}
-        />
-      )}
+      {/* Mobile Sidebar - Slide in from left */}
+      <div
+        className={`fixed inset-0 bg-gray-900 bg-opacity-50 z-40 lg:hidden transition-opacity duration-300 ${
+          isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsMobileOpen(false)}
+      ></div>
       
-      {/* Mobile Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-xl lg:hidden transform transition-transform duration-300 ease-in-out ${
+        className={`bg-white h-screen w-64 fixed top-0 left-0 z-50 transform transition-transform duration-300 lg:hidden flex flex-col ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {sidebarContent}
       </aside>
+      
+      {/* Mobile menu trigger */}
+      {!isMobileOpen && mobileMenuTrigger}
     </>
   );
 };
 
-// Main layout component that handles content area
-const DynamicSidebar = ({ children }: { children?: ReactNode }) => {
-  const { isCollapsed, isMobileOpen, toggleMobile } = useSidebar();
-  
-  return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar />
-      
-      {/* Main Content Area - adjusts based on sidebar state */}
-      <div 
-        className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
-          isCollapsed ? 'lg:ml-16' : 'lg:ml-64'
-        }`}
-      >
-        {children}
-      </div>
-      
-      {/* Mobile Menu Trigger Button */}
-      <button
-        onClick={toggleMobile}
-        className="fixed bottom-6 right-6 z-20 lg:hidden bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-indigo-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        aria-label="Open menu"
-      >
-        <Menu size={24} />
-      </button>
-    </div>
-  );
-};
-
-// Default export with context provider
-const ResponsiveSidebarLayout = ({ children }: { children: ReactNode }) => {
-  return (
-    <SidebarProvider>
-      <DynamicSidebar>
-        {children}
-      </DynamicSidebar>
-    </SidebarProvider>
-  );
-};
-
-export default ResponsiveSidebarLayout;
+export default DynamicSidebar;
