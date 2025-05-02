@@ -55,6 +55,26 @@ const gymSchema = new mongoose.Schema({
     public_id: String,
     caption: String
   }],
+  coinBalance: {
+    type: Number,
+    default: 0
+  },
+  coinReceivedHistory: [{
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    date: {
+      type: Date,
+      default: Date.now
+    },
+    coins: {
+      type: Number,
+      required: true,
+      default: 1
+    }
+  }],
   isApproved: {
     type: Boolean,
     default: false

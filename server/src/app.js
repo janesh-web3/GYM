@@ -18,6 +18,7 @@ import cartRoutes from './routes/cartRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import branchRoutes from './routes/branchRoutes.js';
+import coinRoutes from './routes/coinRoutes.js';
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin', superAdminRoutes);
 app.use('/api/branches', branchRoutes);
+app.use('/api/coins', coinRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

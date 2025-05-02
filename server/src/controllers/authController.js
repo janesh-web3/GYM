@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import asyncHandler from 'express-async-handler';
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -111,4 +112,52 @@ export const getMe = async (req, res) => {
     console.error('Error in getMe:', error);
     res.status(500).json({ message: 'Server error' });
   }
-}; 
+};
+
+// Update user subscription type
+export const updateSubscription = asyncHandler(async (req, res) => {
+  const { userId, subscriptionType } = req.body;
+  
+  // Validate input
+  if (!userId || !subscriptionType) {
+    return res.status(400).json({
+      success: false,
+      message: 'User ID and subscription type are required'
+    });
+  }
+  
+  // Validate subscription type
+  if (!['basic', 'premium'].includes(subscriptionType)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid subscription type'
+    });
+  }
+  
+  // Find and update user
+  const user = await User.findById(userId);
+  
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+  
+  // Update user
+  user.subscriptionType = subscriptionType;
+  await user.save();
+  
+  return res.status(200).json({
+    success: true,
+    message: `Subscription updated to ${subscriptionType}`,
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      subscriptionType: user.subscriptionType,
+      coinBalance: user.coinBalance || 0
+    }
+  });
+}); 

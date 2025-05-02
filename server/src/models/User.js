@@ -30,6 +30,33 @@ const userSchema = new mongoose.Schema({
     enum: ['active', 'inactive', 'pending'],
     default: 'pending'
   },
+  subscriptionType: {
+    type: String,
+    enum: ['basic', 'premium'],
+    default: 'basic'
+  },
+  coinBalance: {
+    type: Number,
+    default: 0
+  },
+  coinPurchaseHistory: [{
+    date: {
+      type: Date,
+      default: Date.now
+    },
+    coins: {
+      type: Number,
+      required: true
+    },
+    amount: {
+      type: Number,
+      required: true
+    },
+    transactionId: {
+      type: String,
+      default: () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    }
+  }],
   createdAt: {
     type: Date,
     default: Date.now

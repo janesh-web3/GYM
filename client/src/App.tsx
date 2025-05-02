@@ -18,6 +18,8 @@ import Attendance from "./pages/gym/Attendance";
 import MemberProgress from "./pages/gym/MemberProgress";
 import Branches from "./pages/gym/Branches";
 import BranchProfile from "./pages/gym/BranchProfile";
+import QrScanner from "./pages/gym/QrScanner";
+import CoinDashboard from "./pages/gym/CoinDashboard";
 import MemberDashboard from "./pages/member/Dashboard";
 import MemberProfile from "./pages/member/Profile";
 import MemberWorkoutPlans from "./pages/member/WorkoutPlan";
@@ -25,6 +27,7 @@ import MemberDietPlans from "./pages/member/DietPlan";
 import MemberSchedule from "./pages/member/Schedule";
 import MemberProgressPage from "./pages/member/Progress";
 import GymShop from "./pages/member/Shop";
+import PremiumMembership from "./pages/member/PremiumMembership";
 
 // React Toastify
 import { ToastContainer } from "react-toastify";
@@ -43,6 +46,7 @@ import GymManagement from "./pages/admin/GymManagement";
 import SalesMonitoring from "./pages/admin/SalesMonitoring";
 import ProductListing from "./pages/admin/ProductListing";
 import Settings from "./pages/admin/Settings";
+import CoinManagement from "./pages/admin/CoinManagement";
 
 const AppRoutes = () => {
   return (
@@ -74,6 +78,8 @@ const AppRoutes = () => {
           <Route path="member-progress" element={<MemberProgress />} />
           <Route path="branches" element={<Branches />} />
           <Route path="branches/:branchId" element={<BranchProfile />} />
+          <Route path="qr-scanner" element={<QrScanner />} />
+          <Route path="coin-dashboard" element={<CoinDashboard />} />
         </Route>
       </Route>
 
@@ -91,6 +97,7 @@ const AppRoutes = () => {
           <Route path="progress" element={<MemberProgressPage />} />
           <Route path="profile" element={<MemberProfile />} />
           <Route path="shop" element={<GymShop />} />
+          <Route path="premium" element={<PremiumMembership />} />
         </Route>
       </Route>
 
@@ -136,6 +143,7 @@ const AppRoutes = () => {
           <Route path="sales" element={<SalesMonitoring />} />
           <Route path="products" element={<ProductListing />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="coin-management" element={<CoinManagement />} />
         </Route>
       </Route>
     </Routes>

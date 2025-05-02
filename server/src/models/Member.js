@@ -43,6 +43,26 @@ const memberSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'User account is required']
   },
+  premiumMembershipData: {
+    memberQRCode: {
+      type: String,
+      default: null
+    },
+    lastVisitedGyms: [{
+      gymId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Gym'
+      },
+      visitDate: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    totalGymsVisited: {
+      type: Number,
+      default: 0
+    }
+  },
   BMI: {
     type: Number,
     default: null

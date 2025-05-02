@@ -8,12 +8,14 @@ import {
   LogOut,
   Menu,
   X,
+  User,
   
   // Admin/SuperAdmin icons
   Building2,
   DollarSign,
   Package,
   Settings,
+  Coins,
   
   // Gym Owner icons
   Edit,
@@ -25,9 +27,11 @@ import {
   Calendar,
   ClipboardCheck,
   TrendingUp,
+  QrCode,
   
   // Member icons
   ShoppingBag,
+  Crown,
   
   // Trainer icons
   Clipboard,
@@ -82,13 +86,20 @@ const getMenuItems = (role: Role): NavItem[] => {
     case 'superadmin':
     case 'admin':
       const basePath = role === 'superadmin' ? '/superadmin' : '/admin';
-      return [
+      const items = [
         { path: `${basePath}/dashboard`, label: 'Dashboard', icon: LayoutDashboard },
         { path: `${basePath}/gym-management`, label: 'Gym Management', icon: Building2 },
         { path: `${basePath}/sales`, label: 'Sales & Revenue', icon: DollarSign },
         { path: `${basePath}/products`, label: 'Products', icon: Package },
         { path: `${basePath}/settings`, label: 'Settings', icon: Settings },
       ];
+      
+      // Add coin management for superadmins only
+      if (role === 'superadmin') {
+        items.splice(4, 0, { path: '/superadmin/coin-management', label: 'Coin Management', icon: Coins });
+      }
+      
+      return items;
     
     case 'gymOwner':
       return [
@@ -103,6 +114,8 @@ const getMenuItems = (role: Role): NavItem[] => {
         { path: '/gym/scheduling', label: 'Classes & Scheduling', icon: Calendar },
         { path: '/gym/attendance', label: 'Attendance', icon: ClipboardCheck },
         { path: '/gym/member-progress', label: 'Member Progress', icon: TrendingUp },
+        { path: '/gym/coin-dashboard', label: 'Coin Management', icon: Coins },
+        { path: '/gym/qr-scanner', label: 'QR Scanner', icon: QrCode },
       ];
     
     case 'trainer':
@@ -117,11 +130,13 @@ const getMenuItems = (role: Role): NavItem[] => {
     case 'member':
       return [
         { path: '/member/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/member/workout-plans', label: 'My Workouts', icon: Dumbbell },
+        { path: '/member/workout-plans', label: 'Workout Plans', icon: Dumbbell },
         { path: '/member/diet-plans', label: 'Diet Plans', icon: Utensils },
-        { path: '/member/schedule', label: 'Class Schedule', icon: Calendar },
-        { path: '/member/progress', label: 'Progress Tracking', icon: BarChart },
+        { path: '/member/schedule', label: 'Schedule', icon: Calendar },
+        { path: '/member/progress', label: 'My Progress', icon: TrendingUp },
         { path: '/member/shop', label: 'Shop', icon: ShoppingBag },
+        { path: '/member/premium', label: 'Premium Access', icon: Crown },
+        { path: '/member/profile', label: 'My Profile', icon: User },
       ];
     
     default:
