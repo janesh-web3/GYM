@@ -5,9 +5,16 @@ import {
   getGym, 
   updateGym, 
   deleteGym, 
-  updateGymStatus 
+  updateGymStatus,
+  getGymStats,
+  uploadPhotos,
+  uploadVideos,
+  deleteGymMedia,
+  uploadLogo,
+  uploadGymMedia
 } from '../controllers/gymController.js';
 import { protect, authorize } from '../middlewares/auth.js';
+import { gymUpload } from '../middlewares/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -15,12 +22,40 @@ const router = express.Router();
 router.get('/', getGyms);
 router.get('/:id', getGym);
 
-// GymOwner routes
-router.post('/', protect, authorize('gymOwner'), createGym);
-router.put('/:id', protect, authorize('gymOwner'), updateGym);
-router.delete('/:id', protect, authorize('gymOwner'), deleteGym);
+// Protected routes (need to be logged in)
+router.use(protect);
 
-// SuperAdmin routes
-router.patch('/:id/status', protect, authorize('superadmin'), updateGymStatus);
+// Routes restricted to admins only
+router.put('/:id/status', authorize('admin'), updateGymStatus);
+
+// Routes restricted to gym owners
+router.post('/', authorize('gymOwner'), createGym);
+router.put('/:id', authorize('gymOwner'), updateGym);
+router.delete('/:id', authorize('gymOwner'), deleteGym);
+router.get('/:id/stats', authorize('gymOwner', 'admin'), getGymStats);
+
+// Media routes with enhanced upload middleware
+router.post(
+  '/:id/logo', 
+  authorize('gymOwner'), 
+  gymUpload.single('logo', 'logo'), 
+  gymUpload.errorHandler,
+  uploadLogo
+);
+
+router.post(
+  '/:id/media/upload', 
+  authorize('gymOwner'), 
+  (req, res, next) => {
+    // Determine which middleware to use based on the media type
+    const mediaType = req.query.type || req.body.type || 'photo';
+    const uploadMiddleware = gymUpload.array('files', mediaType, 10);
+    uploadMiddleware(req, res, next);
+  },
+  gymUpload.errorHandler,
+  uploadGymMedia
+);
+
+router.delete('/:id/media/:mediaId', authorize('gymOwner'), deleteGymMedia);
 
 export default router; 

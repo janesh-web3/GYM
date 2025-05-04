@@ -92,8 +92,9 @@ export const attendanceService = {
 
 // Gym service
 export const gymService = {
-  getAllGyms: async () => {
-    return apiMethods.get('/gyms');
+  getAllGyms: async (status?: string) => {
+    const endpoint = status ? `/gyms?status=${status}` : '/gyms';
+    return apiMethods.get(endpoint);
   },
   
   getGymById: async (gymId) => {
@@ -110,6 +111,10 @@ export const gymService = {
   
   deleteGym: async (gymId) => {
     return apiMethods.delete(`/gyms/${gymId}`);
+  },
+  
+  getGymStats: async (gymId) => {
+    return apiMethods.get(`/gyms/${gymId}/stats`);
   }
 };
 
@@ -284,5 +289,67 @@ export const chatService = {
   
   createConversation: async (participantId) => {
     return apiMethods.post('/chat/conversations', { participantId });
+  }
+};
+
+// Admin service
+export const adminService = {
+  // Dashboard statistics
+  getAdminStats: async () => {
+    return apiMethods.get('/admin/stats');
+  },
+  
+  // Gym management
+  getAllGyms: async (options = {}) => {
+    const { status, city, search, page = 1, limit = 10 } = options;
+    let queryParams = `page=${page}&limit=${limit}`;
+    
+    if (status && status !== 'all') queryParams += `&status=${status}`;
+    if (city) queryParams += `&city=${city}`;
+    if (search) queryParams += `&search=${search}`;
+    
+    return apiMethods.get(`/admin/gyms?${queryParams}`);
+  },
+  
+  updateGymStatus: async (gymId, status, reason = '') => {
+    return apiMethods.put(`/admin/gyms/${gymId}/status`, { status, reason });
+  },
+  
+  // Reports
+  getRevenueReports: async (startDate, endDate, groupBy = 'day') => {
+    let queryParams = '';
+    if (startDate) queryParams += `startDate=${startDate}&`;
+    if (endDate) queryParams += `endDate=${endDate}&`;
+    queryParams += `groupBy=${groupBy}`;
+    
+    return apiMethods.get(`/admin/reports/revenue?${queryParams}`);
+  },
+  
+  getGymPerformanceReports: async (gymId = null) => {
+    const endpoint = gymId 
+      ? `/admin/reports/gyms?gymId=${gymId}`
+      : '/admin/reports/gyms';
+    
+    return apiMethods.get(endpoint);
+  },
+  
+  getProductReports: async (category = '', period = '30') => {
+    return apiMethods.get(`/admin/reports/products?category=${category}&period=${period}`);
+  },
+  
+  // User management
+  getAllUsers: async (options = {}) => {
+    const { role, status, search, page = 1, limit = 10 } = options;
+    let queryParams = `page=${page}&limit=${limit}`;
+    
+    if (role) queryParams += `&role=${role}`;
+    if (status) queryParams += `&status=${status}`;
+    if (search) queryParams += `&search=${search}`;
+    
+    return apiMethods.get(`/admin/users?${queryParams}`);
+  },
+  
+  updateUserStatus: async (userId, status, reason = '') => {
+    return apiMethods.put(`/admin/users/${userId}/status`, { status, reason });
   }
 }; 

@@ -31,7 +31,6 @@ import PremiumMembership from "./pages/member/PremiumMembership";
 
 // React Toastify
 import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 
 // Trainer components
 import TrainerDashboard from "./pages/trainer/Dashboard";

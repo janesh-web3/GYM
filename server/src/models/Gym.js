@@ -33,6 +33,30 @@ const gymSchema = new mongoose.Schema({
       required: [true, 'Country is required']
     }
   },
+  phoneNumber: {
+    type: String,
+    trim: true
+  },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+  },
+  website: {
+    type: String,
+    trim: true
+  },
+  workingHours: {
+    openTime: {
+      type: String,
+      default: '09:00'
+    },
+    closeTime: {
+      type: String,
+      default: '22:00'
+    }
+  },
   services: [{
     name: {
       type: String,
@@ -40,10 +64,14 @@ const gymSchema = new mongoose.Schema({
     },
     description: String,
     price: Number
-  }],
+  }], 
   description: {
     type: String,
     required: [true, 'Description is required']
+  },
+  logo: {
+    url: String,
+    public_id: String
   },
   photos: [{
     url: String,
@@ -100,6 +128,11 @@ gymSchema.pre('remove', async function(next) {
   try {
     const { deleteMedia } = await import('../utils/cloudinary.js');
     
+    // Delete logo if it exists
+    if (this.logo && this.logo.public_id) {
+      await deleteMedia(this.logo.public_id);
+    }
+    
     // Delete all photos
     for (const photo of this.photos) {
       if (photo.public_id) {
@@ -110,7 +143,7 @@ gymSchema.pre('remove', async function(next) {
     // Delete all videos
     for (const video of this.videos) {
       if (video.public_id) {
-        await deleteMedia(video.public_id);
+        await deleteMedia(video.public_id, true);
       }
     }
     

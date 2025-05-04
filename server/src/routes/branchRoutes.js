@@ -1,11 +1,15 @@
 import express from 'express';
 import { protect, authorize } from '../middlewares/authMiddleware.js';
+import { branchUpload } from '../middlewares/uploadMiddleware.js';
 import {
   createBranch,
   getBranches,
   getBranch,
   updateBranch,
   deleteBranch,
+  uploadBranchLogo,
+  uploadBranchMedia,
+  deleteBranchMedia,
   uploadPhoto,
   deletePhoto,
   addMember,
@@ -14,7 +18,6 @@ import {
   removeTrainer,
   reassignMember
 } from '../controllers/branchController.js';
-import { upload } from '../middlewares/upload.js';
 
 const router = express.Router();
 
@@ -34,9 +37,27 @@ router.route('/:id')
   .put(updateBranch)
   .delete(deleteBranch);
 
-// Photo management
-router.post('/:id/photos', upload.array('photos'), uploadPhoto);
-router.delete('/:id/photos/:photoId', deletePhoto);
+// Media routes with enhanced upload middleware
+router.post(
+  '/:id/logo', 
+  branchUpload.single('logo', 'logo'), 
+  branchUpload.errorHandler,
+  uploadBranchLogo
+);
+
+router.post(
+  '/:id/media/upload', 
+  (req, res, next) => {
+    // Determine which middleware to use based on the media type
+    const mediaType = req.query.type || req.body.type || 'photo';
+    const uploadMiddleware = branchUpload.array('files', mediaType, 10);
+    uploadMiddleware(req, res, next);
+  },
+  branchUpload.errorHandler,
+  uploadBranchMedia
+);
+
+router.delete('/:id/media/:mediaId', deleteBranchMedia);
 
 // Member management
 router.post('/:id/members', addMember);

@@ -22,6 +22,15 @@ interface GymProfile {
   trainersCount?: number;
   owner?: string;
   image?: string;
+  status?: string;
+}
+
+interface GymStats {
+  membersCount: number;
+  trainersCount: number;
+  mediaCount: number;
+  monthlyCoins: number;
+  totalCoins: number;
 }
 
 interface GymResponse {
@@ -50,11 +59,13 @@ const Dashboard = () => {
   const [gymExists, setGymExists] = useState<boolean>(true);
   const [branchCount, setBranchCount] = useState<number>(0);
   const [recentBranches, setRecentBranches] = useState<Branch[]>([]);
+  const [gymStats, setGymStats] = useState<GymStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState<boolean>(true);
 
   const stats = [
     {
       title: 'Total Members',
-      value: gym?.membersCount?.toString() || '0',
+      value: gymStats?.membersCount?.toString() || '0',
       change: '+12%',
       icon: Users,
       color: 'bg-blue-100 text-blue-600',
@@ -67,15 +78,15 @@ const Dashboard = () => {
       color: 'bg-green-100 text-green-600',
     },
     {
-      title: 'Monthly Revenue',
-      value: '$45,678',
+      title: 'Monthly Coins',
+      value: gymStats?.monthlyCoins?.toString() || '0',
       change: '+8%',
       icon: DollarSign,
       color: 'bg-purple-100 text-purple-600',
     },
     {
-      title: 'Gym Branches',
-      value: branchCount.toString(),
+      title: 'Media Uploads',
+      value: gymStats?.mediaCount?.toString() || '0',
       change: '+3%',
       icon: Building,
       color: 'bg-orange-100 text-orange-600',
@@ -96,14 +107,19 @@ const Dashboard = () => {
           
           // Fetch branches
           fetchBranches();
+          
+          // Fetch gym stats
+          fetchGymStats(gymData._id);
         } else {
           // No gym exists yet
           setGymExists(false);
+          setStatsLoading(false);
         }
         
         setLoading(false);
       } catch (error) {
         setLoading(false);
+        setStatsLoading(false);
         setGymExists(false);
         showError('Failed to load gym profile');
         console.error('Error fetching gym profile:', error);
@@ -129,6 +145,19 @@ const Dashboard = () => {
       setRecentBranches(recent);
     } catch (error) {
       console.error('Error fetching branches:', error);
+    }
+  };
+
+  const fetchGymStats = async (gymId: string) => {
+    try {
+      setStatsLoading(true);
+      const stats = await gymService.getGymStats(gymId) as GymStats;
+      setGymStats(stats);
+      setStatsLoading(false);
+    } catch (error) {
+      setStatsLoading(false);
+      console.error('Error fetching gym stats:', error);
+      // Don't show an error since this is secondary information
     }
   };
 

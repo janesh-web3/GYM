@@ -56,45 +56,55 @@ export const getAllGyms = async (req, res) => {
   }
 };
 
-// @desc    Update gym status (approve/ban/suspend)
+// @desc    Update gym status
 // @route   PUT /api/admin/gyms/:id/status
 // @access  Private (SuperAdmin)
-export const updateGymStatus = async (req, res) => {
+export const updateGymStatusByAdmin = async (req, res) => {
   try {
-    const { id } = req.params;
     const { status, reason } = req.body;
-    
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return errorResponse(res, 400, 'Invalid gym ID');
+
+    if (!['pending', 'active', 'banned'].includes(status)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid status value. Must be pending, active, or banned.' 
+      });
     }
-    
-    // Validate status
-    if (!status || !['active', 'pending', 'suspended', 'inactive'].includes(status)) {
-      return errorResponse(res, 400, 'Valid status is required (active, pending, suspended, inactive)');
-    }
-    
-    // Find gym
-    const gym = await Gym.findById(id);
+
+    const gym = await Gym.findById(req.params.id);
+
     if (!gym) {
-      return errorResponse(res, 404, 'Gym not found');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gym not found' 
+      });
     }
-    
-    // Update status
+
+    // Update the gym status
     gym.status = status;
     
-    // Add reason for suspension/inactivation if provided
-    if ((status === 'suspended' || status === 'inactive') && reason) {
-      gym.statusReason = reason;
-    } else if (status === 'active') {
-      gym.statusReason = '';
-    }
+    // Auto-update isApproved based on status
+    gym.isApproved = status === 'active';
     
     await gym.save();
+
+    // Get owner information for the response
+    const owner = await User.findById(gym.ownerId).select('name email');
+
+    // Send notification to gym owner (implementation depends on your notification system)
+    // This would typically involve creating a notification record or sending an email
     
-    return successResponse(res, 200, `Gym status updated to ${status}`, gym);
+    res.json({
+      success: true,
+      data: {
+        gym: {
+          ...gym.toObject(),
+          ownerId: owner
+        },
+        message: `Gym status updated to ${status} successfully`
+      }
+    });
   } catch (error) {
-    console.error('Update gym status error:', error);
-    return errorResponse(res, 500, 'Server error');
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -670,5 +680,91 @@ export const getProductReports = async (req, res) => {
   } catch (error) {
     console.error('Get product report error:', error);
     return errorResponse(res, 500, 'Server error');
+  }
+};
+
+// @desc    Get all gyms with advanced filtering
+// @route   GET /api/admin/gyms
+// @access  Private (SuperAdmin)
+export const getGyms = async (req, res) => {
+  try {
+    const { status, city, search, page = 1, limit = 10 } = req.query;
+    const filter = {};
+
+    // Add filters
+    if (status && status !== 'all') filter.status = status;
+    if (city) filter['address.city'] = city;
+    if (search) filter.$text = { $search: search };
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Fetch gyms with owner information
+    const gyms = await Gym.find(filter)
+      .populate('ownerId', 'name email')
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    // Get total count for pagination
+    const total = await Gym.countDocuments(filter);
+    
+    const pagination = {
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      pages: Math.ceil(total / parseInt(limit))
+    };
+
+    res.json({
+      success: true,
+      data: {
+        gyms,
+        pagination
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get admin dashboard stats 
+// @route   GET /api/admin/stats
+// @access  Private (SuperAdmin)
+export const getAdminStats = async (req, res) => {
+  try {
+    // Total gyms count
+    const totalGyms = await Gym.countDocuments();
+    
+    // Status-based counts
+    const activeGyms = await Gym.countDocuments({ status: 'active' });
+    const pendingGyms = await Gym.countDocuments({ status: 'pending' });
+    const bannedGyms = await Gym.countDocuments({ status: 'banned' });
+    
+    // Recent gyms awaiting approval
+    const recentPendingGyms = await Gym.find({ status: 'pending' })
+      .populate('ownerId', 'name email')
+      .sort('-createdAt')
+      .limit(5);
+    
+    // Top gyms by coin balance
+    const topGyms = await Gym.find({ status: 'active' })
+      .sort('-coinBalance')
+      .limit(5)
+      .populate('ownerId', 'name email');
+    
+    res.json({
+      success: true,
+      data: {
+        totalGyms,
+        activeGyms,
+        pendingGyms,
+        bannedGyms,
+        recentPendingGyms,
+        topGyms
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 }; 

@@ -1,5 +1,6 @@
 import Gym from '../models/Gym.js';
 import { uploadMedia, deleteMedia } from '../utils/cloudinary.js';
+import fs from 'fs';
 
 // @desc    Create new gym
 // @route   POST /api/gyms
@@ -78,6 +79,24 @@ export const updateGym = async (req, res) => {
     const updateData = { ...req.body };
     delete updateData.isApproved;
     delete updateData.status;
+
+    // Ensure phone, email, website, and working hours are properly handled
+    // These fields should be explicitly set or kept as they were
+    if (!updateData.phoneNumber && gym.phoneNumber) {
+      updateData.phoneNumber = gym.phoneNumber;
+    }
+
+    if (!updateData.email && gym.email) {
+      updateData.email = gym.email;
+    }
+
+    if (!updateData.website && gym.website) {
+      updateData.website = gym.website;
+    }
+
+    if (!updateData.workingHours && gym.workingHours) {
+      updateData.workingHours = gym.workingHours;
+    }
 
     const updatedGym = await Gym.findByIdAndUpdate(
       req.params.id,
@@ -246,5 +265,204 @@ export const deleteGymMedia = async (req, res) => {
     res.json({ message: 'Media deleted successfully' });
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Get gym statistics (members, trainers, media count, monthly coins)
+// @route   GET /api/gyms/:id/stats
+// @access  Private (GymOwner, SuperAdmin)
+export const getGymStats = async (req, res) => {
+  try {
+    const gymId = req.params.id;
+    
+    // Get the gym
+    const gym = await Gym.findById(gymId);
+    
+    if (!gym) {
+      return res.status(404).json({ message: 'Gym not found' });
+    }
+    
+    // Check ownership or superadmin privileges
+    if (req.user.role !== 'superadmin' && gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to access these stats' });
+    }
+    
+    // Import Models when needed
+    const Member = await import('../models/Member.js').then(m => m.default);
+    const Trainer = await import('../models/Trainer.js').then(m => m.default);
+    
+    // Get current date and first day of current month for monthly calculations
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // Calculate stats
+    const membersCount = await Member.countDocuments({ gymId });
+    const trainersCount = await Trainer.countDocuments({ gymId });
+    const mediaCount = (gym.photos ? gym.photos.length : 0) + (gym.videos ? gym.videos.length : 0);
+    
+    // Calculate monthly coins received
+    const monthlyCoins = gym.coinReceivedHistory
+      .filter(transaction => new Date(transaction.date) >= firstDayOfMonth)
+      .reduce((total, transaction) => total + transaction.coins, 0);
+    
+    const stats = {
+      membersCount,
+      trainersCount,
+      mediaCount,
+      monthlyCoins,
+      totalCoins: gym.coinBalance
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Upload gym logo
+// @route   POST /api/gyms/:id/logo
+// @access  Private (GymOwner - only their own gym)
+export const uploadLogo = async (req, res) => {
+  try {
+    const gym = await Gym.findById(req.params.id);
+
+    if (!gym) {
+      return res.status(404).json({ message: 'Gym not found' });
+    }
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to update this gym' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // If gym already has a logo, delete the old one from Cloudinary
+    if (gym.logo && gym.logo.public_id) {
+      await deleteMedia(gym.logo.public_id);
+    }
+
+    // Upload the new logo to Cloudinary
+    const result = await uploadMedia(req.file.path, 'gym-logos');
+
+    // Update the gym with the new logo
+    gym.logo = {
+      url: result.url,
+      public_id: result.public_id
+    };
+
+    await gym.save();
+
+    // Remove the temporary file if it exists
+    if (req.file.path) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.json({ 
+      success: true, 
+      data: { 
+        logo: gym.logo 
+      } 
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Upload media for gym (photos/videos)
+// @route   POST /api/gyms/:id/media/upload
+// @access  Private (GymOwner - only their own gym)
+export const uploadGymMedia = async (req, res) => {
+  try {
+    const gym = await Gym.findById(req.params.id);
+
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gym not found' 
+      });
+    }
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to update this gym' 
+      });
+    }
+
+    // Files are already uploaded to Cloudinary by the middleware
+    // and available as req.file or req.files
+    if (!req.files && !req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No files uploaded' 
+      });
+    }
+
+    // Handle both single file and multiple files
+    const files = req.files || [req.file];
+    const type = req.body.type || req.fileType || 'photo';
+    const isVideo = type === 'video';
+    
+    const uploadResults = [];
+    
+    // Process each file
+    for (const file of files) {
+      // Create media object from Cloudinary response
+      let mediaObj = {
+        url: file.path, // Cloudinary URL is in path
+        public_id: file.filename, // Cloudinary public_id is in filename
+        caption: req.body.caption || file.originalname || ''
+      };
+      
+      // Save to appropriate array in gym document
+      if (type === 'logo') {
+        // If gym already has a logo, delete the old one if we have the public_id
+        if (gym.logo && gym.logo.public_id) {
+          try {
+            await deleteMedia(gym.logo.public_id);
+          } catch (err) {
+            console.error('Error deleting old logo:', err);
+            // Continue even if delete fails
+          }
+        }
+        
+        gym.logo = mediaObj;
+        uploadResults.push({
+          ...mediaObj,
+          type: 'logo'
+        });
+      } else if (isVideo) {
+        const newVideo = mediaObj;
+        gym.videos.push(newVideo);
+        uploadResults.push({
+          ...newVideo,
+          type: 'video'
+        });
+      } else {
+        const newPhoto = mediaObj;
+        gym.photos.push(newPhoto);
+        uploadResults.push({
+          ...newPhoto,
+          type: 'photo'
+        });
+      }
+    }
+
+    await gym.save();
+
+    res.status(200).json({ 
+      success: true, 
+      data: uploadResults
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error uploading media' 
+    });
   }
 }; 

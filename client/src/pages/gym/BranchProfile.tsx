@@ -81,9 +81,9 @@ const BranchProfile = () => {
 
   const fetchAllBranches = async () => {
     try {
-      const data = await branchService.getAllBranches();
+      const data = await branchService.getAllBranches() as { _id: string, branchName: string }[];
       // Filter out current branch
-      const otherBranches = data.filter((b: any) => b._id !== branchId);
+      const otherBranches = data.filter((b) => b._id !== branchId);
       setBranches(otherBranches);
     } catch (error) {
       console.error('Error fetching branches:', error);

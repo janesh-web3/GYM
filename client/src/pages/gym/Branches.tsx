@@ -1,8 +1,18 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Eye, MapPin, Phone, Clock, User, Loader } from 'lucide-react';
-import { branchService } from '../../lib/services';
-import { showSuccess, showError } from '../../utils/toast';
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Eye,
+  MapPin,
+  Phone,
+  Clock,
+  User,
+  Loader,
+} from "lucide-react";
+import { branchService } from "../../lib/services";
+import { showSuccess, showError } from "../../utils/toast";
 
 interface Branch {
   gymId: string;
@@ -48,26 +58,26 @@ interface FormData {
 }
 
 const INITIAL_FORM_DATA: FormData = {
-  branchName: '',
-  gymId: '',
+  branchName: "",
+  gymId: "",
   address: {
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: ''
+    street: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "",
   },
-  contactNumber: '',
+  contactNumber: "",
   openingHours: {
-    monday: { open: '09:00', close: '20:00' },
-    tuesday: { open: '09:00', close: '20:00' },
-    wednesday: { open: '09:00', close: '20:00' },
-    thursday: { open: '09:00', close: '20:00' },
-    friday: { open: '09:00', close: '20:00' },
-    saturday: { open: '09:00', close: '17:00' },
-    sunday: { open: '10:00', close: '15:00' }
+    monday: { open: "09:00", close: "20:00" },
+    tuesday: { open: "09:00", close: "20:00" },
+    wednesday: { open: "09:00", close: "20:00" },
+    thursday: { open: "09:00", close: "20:00" },
+    friday: { open: "09:00", close: "20:00" },
+    saturday: { open: "09:00", close: "17:00" },
+    sunday: { open: "10:00", close: "15:00" },
   },
-  services: []
+  services: [],
 };
 
 const Branches = () => {
@@ -78,7 +88,9 @@ const Branches = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentBranchId, setCurrentBranchId] = useState<string | null>(null);
   const [fileInput, setFileInput] = useState<File | null>(null);
-  const [services, setServices] = useState<{ name: string; description: string; price: number }[]>([]);
+  const [services, setServices] = useState<
+    { name: string; description: string; price: number }[]
+  >([]);
 
   useEffect(() => {
     fetchBranches();
@@ -87,12 +99,14 @@ const Branches = () => {
   const fetchBranches = async () => {
     try {
       setLoading(true);
-      const response = await branchService.getAllBranches();
-      setBranches(response as Branch[]);
+      const response = await branchService.getAllBranches() as {data : Branch[]};
+      if (response) {
+        setBranches(response.data);
+      }
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching branches:', error);
-      showError('Failed to fetch branches');
+      console.error("Error fetching branches:", error);
+      showError("Failed to fetch branches");
       setLoading(false);
     }
   };
@@ -106,74 +120,107 @@ const Branches = () => {
   const openEditModal = async (branchId: string) => {
     try {
       setLoading(true);
-      const branchData = await branchService.getBranchById(branchId) as Branch;
+      const branchData = (await branchService.getBranchById(
+        branchId
+      )) as Branch;
       setFormData({
         branchName: branchData.branchName,
         gymId: branchData.gymId,
         address: branchData.address,
         contactNumber: branchData.contactNumber,
         openingHours: {
-          monday: branchData.openingHours.monday || { open: '09:00', close: '20:00' },
-          tuesday: branchData.openingHours.tuesday || { open: '09:00', close: '20:00' },
-          wednesday: branchData.openingHours.wednesday || { open: '09:00', close: '20:00' },
-          thursday: branchData.openingHours.thursday || { open: '09:00', close: '20:00' },
-          friday: branchData.openingHours.friday || { open: '09:00', close: '20:00' },
-          saturday: branchData.openingHours.saturday || { open: '09:00', close: '17:00' },
-          sunday: branchData.openingHours.sunday || { open: '10:00', close: '15:00' }
+          monday: branchData.openingHours.monday || {
+            open: "09:00",
+            close: "20:00",
+          },
+          tuesday: branchData.openingHours.tuesday || {
+            open: "09:00",
+            close: "20:00",
+          },
+          wednesday: branchData.openingHours.wednesday || {
+            open: "09:00",
+            close: "20:00",
+          },
+          thursday: branchData.openingHours.thursday || {
+            open: "09:00",
+            close: "20:00",
+          },
+          friday: branchData.openingHours.friday || {
+            open: "09:00",
+            close: "20:00",
+          },
+          saturday: branchData.openingHours.saturday || {
+            open: "09:00",
+            close: "17:00",
+          },
+          sunday: branchData.openingHours.sunday || {
+            open: "10:00",
+            close: "15:00",
+          },
         },
-        services: (branchData.services || []).map(service => ({
+        services: (branchData.services || []).map((service) => ({
           name: service.name,
-          description: service.description || '',
-          price: service.price || 0
-        }))
+          description: service.description || "",
+          price: service.price || 0,
+        })),
       });
-      setServices((branchData.services || []).map(service => ({
-        name: service.name,
-        description: service.description || '',
-        price: service.price || 0
-      })));
+      setServices(
+        (branchData.services || []).map((service) => ({
+          name: service.name,
+          description: service.description || "",
+          price: service.price || 0,
+        }))
+      );
       setCurrentBranchId(branchId);
       setIsEdit(true);
       setModalOpen(true);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching branch details:', error);
-      showError('Failed to load branch details');
+      console.error("Error fetching branch details:", error);
+      showError("Failed to load branch details");
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
     const { name, value } = e.target;
-    
+
     // Handle nested properties
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setFormData(prev => ({
+    if (name.includes(".")) {
+      const [parent, child] = name.split(".");
+      setFormData((prev) => ({
         ...prev,
         [parent as keyof FormData]: {
           ...(prev[parent as keyof FormData] as Record<string, any>),
-          [child]: value
-        }
+          [child]: value,
+        },
       }));
     } else {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [name]: value
+        [name]: value,
       }));
     }
   };
 
-  const handleOpeningHoursChange = (day: string, field: 'open' | 'close', value: string) => {
-    setFormData(prev => ({
+  const handleOpeningHoursChange = (
+    day: string,
+    field: "open" | "close",
+    value: string
+  ) => {
+    setFormData((prev) => ({
       ...prev,
       openingHours: {
         ...prev.openingHours,
         [day as keyof typeof prev.openingHours]: {
           ...prev.openingHours[day as keyof typeof prev.openingHours],
-          [field]: value
-        }
-      }
+          [field]: value,
+        },
+      },
     }));
   };
 
@@ -181,13 +228,13 @@ const Branches = () => {
     const updatedServices = [...services];
     updatedServices[index] = {
       ...updatedServices[index],
-      [field]: field === 'price' ? parseFloat(value) : value
+      [field]: field === "price" ? parseFloat(value) : value,
     };
     setServices(updatedServices);
   };
 
   const addService = () => {
-    setServices([...services, { name: '', description: '', price: 0 }]);
+    setServices([...services, { name: "", description: "", price: 0 }]);
   };
 
   const removeService = (index: number) => {
@@ -204,67 +251,67 @@ const Branches = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     try {
       setLoading(true);
-      
+
       // Add services to form data
       const submitData = {
         ...formData,
-        services: services
+        services: services,
       };
-      
+
       if (isEdit && currentBranchId) {
         await branchService.updateBranch(currentBranchId, submitData);
-        showSuccess('Branch updated successfully');
+        showSuccess("Branch updated successfully");
       } else {
         await branchService.createBranch(submitData);
-        showSuccess('Branch created successfully');
+        showSuccess("Branch created successfully");
       }
-      
+
       // Upload photo if selected
       if (fileInput && currentBranchId) {
         const formData = new FormData();
-        formData.append('photos', fileInput);
+        formData.append("photos", fileInput);
         await branchService.uploadPhoto(currentBranchId, formData);
       }
-      
+
       setModalOpen(false);
       fetchBranches();
     } catch (error) {
-      console.error('Error saving branch:', error);
-      showError('Failed to save branch');
+      console.error("Error saving branch:", error);
+      showError("Failed to save branch");
       setLoading(false);
     }
   };
 
   const handleDelete = async (branchId: string) => {
-    if (window.confirm('Are you sure you want to delete this branch?')) {
+    if (window.confirm("Are you sure you want to delete this branch?")) {
       try {
         setLoading(true);
         await branchService.deleteBranch(branchId);
-        showSuccess('Branch deleted successfully');
+        showSuccess("Branch deleted successfully");
         fetchBranches();
       } catch (error) {
-        console.error('Error deleting branch:', error);
-        showError('Failed to delete branch');
+        console.error("Error deleting branch:", error);
+        showError("Failed to delete branch");
         setLoading(false);
       }
     }
   };
 
-  const getAddressString = (address: Branch['address']) => {
+  const getAddressString = (address: Branch["address"]) => {
     return `${address.street}, ${address.city}, ${address.state} ${address.zipCode}, ${address.country}`;
   };
 
   const formatOpeningHours = (branch: Branch) => {
     // Format opening hours for display in a readable way
     const days = Object.keys(branch.openingHours);
-    if (days.length === 0) return 'Not available';
-    
+    if (days.length === 0) return "Not available";
+
     // Just return a sample for the card
     const monday = branch.openingHours.monday;
-    return monday ? `${monday.open} - ${monday.close}` : 'Not available';
+    return monday ? `${monday.open} - ${monday.close}` : "Not available";
   };
 
   return (
@@ -287,7 +334,7 @@ const Branches = () => {
       ) : branches.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-6 text-center">
           <p className="text-gray-500 mb-4">You don't have any branches yet.</p>
-          <button 
+          <button
             onClick={openAddModal}
             className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-md"
           >
@@ -296,84 +343,107 @@ const Branches = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {branches.map((branch) => (
-            <div key={branch._id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="h-40 bg-gray-200 relative">
-                {branch.photos && branch.photos.length > 0 ? (
-                  <img
-                    src={branch.photos[0].url}
-                    alt={branch.branchName}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                    <span className="text-gray-400">No Image</span>
-                  </div>
-                )}
-                <div className="absolute top-2 right-2 bg-white rounded-md px-2 py-1 text-xs font-medium">
-                  {branch.status === 'active' ? (
-                    <span className="text-green-600">Active</span>
+          {branches.length !== 0 &&
+            branches &&
+            branches.map((branch) => (
+              <div
+                key={branch._id}
+                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+              >
+                <div className="h-40 bg-gray-200 relative">
+                  {branch.photos && branch.photos.length > 0 ? (
+                    <img
+                      src={branch.photos[0].url}
+                      alt={branch.branchName}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <span className="text-gray-600">Inactive</span>
+                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                      <span className="text-gray-400">No Image</span>
+                    </div>
                   )}
+                  <div className="absolute top-2 right-2 bg-white rounded-md px-2 py-1 text-xs font-medium">
+                    {branch.status === "active" ? (
+                      <span className="text-green-600">Active</span>
+                    ) : (
+                      <span className="text-gray-600">Inactive</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  <h3 className="text-lg font-semibold mb-2">
+                    {branch.branchName}
+                  </h3>
+
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-start gap-2">
+                      <MapPin
+                        size={16}
+                        className="mt-1 flex-shrink-0 text-gray-500"
+                      />
+                      <span className="text-sm text-gray-600">
+                        {getAddressString(branch.address)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Phone
+                        size={16}
+                        className="flex-shrink-0 text-gray-500"
+                      />
+                      <span className="text-sm text-gray-600">
+                        {branch.contactNumber}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Clock
+                        size={16}
+                        className="flex-shrink-0 text-gray-500"
+                      />
+                      <span className="text-sm text-gray-600">
+                        {formatOpeningHours(branch)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <User size={16} className="flex-shrink-0 text-gray-500" />
+                      <span className="text-sm text-gray-600">
+                        {branch.members?.length || 0} Members ·{" "}
+                        {branch.trainers?.length || 0} Trainers
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Link
+                      to={`/gym/branches/${branch._id}`}
+                      className="flex-1 flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-md text-sm"
+                    >
+                      <Eye size={14} />
+                      View
+                    </Link>
+
+                    <button
+                      onClick={() => openEditModal(branch._id)}
+                      className="flex-1 flex items-center justify-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-md text-sm"
+                    >
+                      <Edit2 size={14} />
+                      Edit
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(branch._id)}
+                      className="flex-1 flex items-center justify-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-md text-sm"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
-              
-              <div className="p-4">
-                <h3 className="text-lg font-semibold mb-2">{branch.branchName}</h3>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-start gap-2">
-                    <MapPin size={16} className="mt-1 flex-shrink-0 text-gray-500" />
-                    <span className="text-sm text-gray-600">{getAddressString(branch.address)}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Phone size={16} className="flex-shrink-0 text-gray-500" />
-                    <span className="text-sm text-gray-600">{branch.contactNumber}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Clock size={16} className="flex-shrink-0 text-gray-500" />
-                    <span className="text-sm text-gray-600">{formatOpeningHours(branch)}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <User size={16} className="flex-shrink-0 text-gray-500" />
-                    <span className="text-sm text-gray-600">
-                      {branch.members?.length || 0} Members · {branch.trainers?.length || 0} Trainers
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex gap-2">
-                  <Link 
-                    to={`/gym/branches/${branch._id}`} 
-                    className="flex-1 flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-md text-sm"
-                  >
-                    <Eye size={14} />
-                    View
-                  </Link>
-                  
-                  <button 
-                    onClick={() => openEditModal(branch._id)}
-                    className="flex-1 flex items-center justify-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-md text-sm"
-                  >
-                    <Edit2 size={14} />
-                    Edit
-                  </button>
-                  
-                  <button 
-                    onClick={() => handleDelete(branch._id)}
-                    className="flex-1 flex items-center justify-center gap-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-md text-sm"
-                  >
-                    <Trash2 size={14} />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       )}
 
@@ -383,9 +453,9 @@ const Branches = () => {
           <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-4">
-                {isEdit ? 'Edit Branch' : 'Add New Branch'}
+                {isEdit ? "Edit Branch" : "Add New Branch"}
               </h2>
-              
+
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div className="col-span-2">
@@ -401,7 +471,7 @@ const Branches = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
                   </div>
-                  
+
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Contact Number *
@@ -415,7 +485,7 @@ const Branches = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
                   </div>
-                  
+
                   <div className="col-span-2">
                     <h3 className="text-md font-medium mb-2">Address</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -432,7 +502,7 @@ const Branches = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           City *
@@ -446,7 +516,7 @@ const Branches = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           State *
@@ -460,7 +530,7 @@ const Branches = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           ZIP Code *
@@ -474,7 +544,7 @@ const Branches = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Country *
@@ -490,68 +560,92 @@ const Branches = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="col-span-2">
                     <h3 className="text-md font-medium mb-2">Opening Hours</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(formData.openingHours).map(([day, hours]) => (
-                        <div key={day} className="flex items-center">
-                          <span className="w-24 capitalize">{day}:</span>
-                          <input
-                            type="time"
-                            value={hours.open}
-                            onChange={(e) => handleOpeningHoursChange(day, 'open', e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded-md mr-2"
-                          />
-                          <span className="mx-1">to</span>
-                          <input
-                            type="time"
-                            value={hours.close}
-                            onChange={(e) => handleOpeningHoursChange(day, 'close', e.target.value)}
-                            className="px-2 py-1 border border-gray-300 rounded-md"
-                          />
-                        </div>
-                      ))}
+                      {Object.entries(formData.openingHours).map(
+                        ([day, hours]) => (
+                          <div key={day} className="flex items-center">
+                            <span className="w-24 capitalize">{day}:</span>
+                            <input
+                              type="time"
+                              value={hours.open}
+                              onChange={(e) =>
+                                handleOpeningHoursChange(
+                                  day,
+                                  "open",
+                                  e.target.value
+                                )
+                              }
+                              className="px-2 py-1 border border-gray-300 rounded-md mr-2"
+                            />
+                            <span className="mx-1">to</span>
+                            <input
+                              type="time"
+                              value={hours.close}
+                              onChange={(e) =>
+                                handleOpeningHoursChange(
+                                  day,
+                                  "close",
+                                  e.target.value
+                                )
+                              }
+                              className="px-2 py-1 border border-gray-300 rounded-md"
+                            />
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
-                  
+
                   <div className="col-span-2">
                     <h3 className="text-md font-medium mb-2">
                       Services & Amenities
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={addService}
                         className="ml-2 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded"
                       >
                         + Add Service
                       </button>
                     </h3>
-                    
+
                     {services.map((service, index) => (
                       <div key={index} className="flex items-center gap-2 mb-2">
                         <input
                           type="text"
                           placeholder="Service Name"
                           value={service.name}
-                          onChange={(e) => handleServiceChange(index, 'name', e.target.value)}
+                          onChange={(e) =>
+                            handleServiceChange(index, "name", e.target.value)
+                          }
                           className="flex-grow px-3 py-2 border border-gray-300 rounded-md"
                         />
                         <input
                           type="text"
                           placeholder="Description"
                           value={service.description}
-                          onChange={(e) => handleServiceChange(index, 'description', e.target.value)}
+                          onChange={(e) =>
+                            handleServiceChange(
+                              index,
+                              "description",
+                              e.target.value
+                            )
+                          }
                           className="flex-grow px-3 py-2 border border-gray-300 rounded-md"
                         />
                         <input
                           type="number"
                           placeholder="Price"
                           value={service.price}
-                          onChange={(e) => handleServiceChange(index, 'price', e.target.value)}
+                          onChange={(e) =>
+                            handleServiceChange(index, "price", e.target.value)
+                          }
                           className="w-24 px-3 py-2 border border-gray-300 rounded-md"
                         />
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => removeService(index)}
                           className="text-red-500 hover:text-red-700"
                         >
@@ -560,10 +654,12 @@ const Branches = () => {
                       </div>
                     ))}
                   </div>
-                  
+
                   {isEdit && (
                     <div className="col-span-2">
-                      <h3 className="text-md font-medium mb-2">Upload Branch Photo</h3>
+                      <h3 className="text-md font-medium mb-2">
+                        Upload Branch Photo
+                      </h3>
                       <input
                         type="file"
                         accept="image/*"
@@ -573,7 +669,7 @@ const Branches = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex justify-end gap-3 mt-6">
                   <button
                     type="button"
@@ -592,8 +688,10 @@ const Branches = () => {
                         <Loader size={18} className="animate-spin mr-2" />
                         Saving...
                       </span>
+                    ) : isEdit ? (
+                      "Update Branch"
                     ) : (
-                      isEdit ? 'Update Branch' : 'Create Branch'
+                      "Create Branch"
                     )}
                   </button>
                 </div>
@@ -606,4 +704,4 @@ const Branches = () => {
   );
 };
 
-export default Branches; 
+export default Branches;
