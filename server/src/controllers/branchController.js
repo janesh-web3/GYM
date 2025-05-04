@@ -1,929 +1,496 @@
 import Branch from '../models/Branch.js';
 import Gym from '../models/Gym.js';
+import BranchMembership from '../models/BranchMembership.js';
 import { uploadMedia, deleteMedia } from '../utils/cloudinary.js';
-import fs from 'fs';
+import { UserSubscription } from '../models/Subscription.js';
+import mongoose from 'mongoose';
 
-// @desc    Create new branch
+// @desc    Create new branch for a gym
 // @route   POST /api/branches
 // @access  Private (GymOwner)
 export const createBranch = async (req, res) => {
   try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
+    const { gymId } = req.body;
+
+    // Verify that the gym exists and belongs to the user
+    const gym = await Gym.findById(gymId);
     if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user'
-      });
+      return res.status(404).json({ message: 'Gym not found' });
     }
 
-    const branchData = {
-      branchName : req.body.branchName,
-      gymId: gym._id,
-      ownerId: req.user._id,
-      address: {
-        street: req.body.address.street,
-        city: req.body.address.city,
-        state: req.body.address.state,
-        zipCode: req.body.address.zipCode,
-        country: req.body.address.country
-      },
-      phoneNumber: req.body.contactNumber,
-      email: req.body.email,
-      openingHours : req.body.openingHours,
-      description: req.body.description,
-      services: req.body.services,
-      status : req.body.status,
-      photos: req.body.photos,
-      trainers: req.body.trainers,
-      members: req.body.members
-    };
-    console.log(branchData);
-    // Create branch with the found gym's ID
-    const branch = await Branch.create(branchData);
+    // Check ownership of the gym
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to add branches to this gym' });
+    }
 
-    res.status(201).json({
-      success: true,
-      data: branch
+    // Create the branch
+    const branch = await Branch.create({
+      ...req.body,
+      gymId
     });
+
+    res.status(201).json(branch);
   } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(400).json({ message: error.message });
   }
 };
 
-// @desc    Get all branches for a gym
-// @route   GET /api/branches
-// @access  Private (GymOwner)
-export const getBranches = async (req, res) => {
+// @desc    Get all branches for a specific gym
+// @route   GET /api/gyms/:gymId/branches
+// @access  Public
+export const getGymBranches = async (req, res) => {
   try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
+    const { gymId } = req.params;
     
+    // Verify gym exists
+    const gym = await Gym.findById(gymId);
     if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
+      return res.status(404).json({ message: 'Gym not found' });
     }
-    
-    // Find all branches for this gym
-    const branches = await Branch.find({ gymId: gym._id })
-      .populate('gymId', 'gymName')
-      .sort('-createdAt');
 
-    res.json({
-      success: true,
-      count: branches.length,
-      data: branches
-    });
+    const branches = await Branch.find({ gymId }).sort('branchName');
+    res.json(branches);
   } catch (error) {
-    res.status(500).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Get single branch
+// @desc    Get a single branch by ID
 // @route   GET /api/branches/:id
-// @access  Private (GymOwner)
+// @access  Public
 export const getBranch = async (req, res) => {
   try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
-    if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
-    }
-    
-    // Find the branch
     const branch = await Branch.findById(req.params.id)
-      .populate('gymId', 'gymName');
-    
+      .populate('trainers', 'name profileImage');
+
     if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
+      return res.status(404).json({ message: 'Branch not found' });
     }
-    
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to access this branch' 
-      });
-    }
-    
-    res.json({
-      success: true,
-      data: branch
-    });
+
+    res.json(branch);
   } catch (error) {
-    res.status(500).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Update branch
+// @desc    Update a branch
 // @route   PUT /api/branches/:id
-// @access  Private (GymOwner)
+// @access  Private (GymOwner of the associated gym)
 export const updateBranch = async (req, res) => {
   try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
-    if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
-    }
-    
     const branch = await Branch.findById(req.params.id);
-    
     if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
+      return res.status(404).json({ message: 'Branch not found' });
     }
-    
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
+
+    // Get the associated gym to check ownership
+    const gym = await Gym.findById(branch.gymId);
+    if (!gym) {
+      return res.status(404).json({ message: 'Associated gym not found' });
     }
-    
-    // Ensure specific fields are properly handled
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to update this branch' });
+    }
+
+    // Don't allow changing the gymId relationship
     const updateData = { ...req.body };
-    
-    // Don't allow changing the gymId
     delete updateData.gymId;
-    delete updateData.ownerId;
-    
-    // Update the branch
+
     const updatedBranch = await Branch.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true, runValidators: true }
     );
-    
-    res.json({
-      success: true,
-      data: updatedBranch
-    });
+
+    res.json(updatedBranch);
   } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(400).json({ message: error.message });
   }
 };
 
-// @desc    Delete branch
+// @desc    Delete a branch
 // @route   DELETE /api/branches/:id
-// @access  Private (GymOwner)
+// @access  Private (GymOwner of the associated gym)
 export const deleteBranch = async (req, res) => {
   try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
-    if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
-    }
-    
     const branch = await Branch.findById(req.params.id);
-    
     if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
+      return res.status(404).json({ message: 'Branch not found' });
     }
-    
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to delete this branch' 
-      });
+
+    // Get the associated gym to check ownership
+    const gym = await Gym.findById(branch.gymId);
+    if (!gym) {
+      return res.status(404).json({ message: 'Associated gym not found' });
     }
-    
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete this branch' });
+    }
+
     await branch.remove();
-    
-    res.json({ 
-      success: true,
-      data: {},
-      message: 'Branch removed' 
-    });
+    res.json({ message: 'Branch removed successfully' });
   } catch (error) {
-    res.status(500).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Upload branch logo
-// @route   POST /api/branches/:id/logo
-// @access  Private (GymOwner)
-export const uploadBranchLogo = async (req, res) => {
-  try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
-    if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
-    }
-    
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
-    }
-    
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
-    }
-    
-    if (!req.file) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'No file uploaded' 
-      });
-    }
-    
-    // If branch already has a logo, delete the old one from Cloudinary
-    if (branch.logo && branch.logo.public_id) {
-      await deleteMedia(branch.logo.public_id);
-    }
-    
-    // Upload the new logo to Cloudinary
-    const result = await uploadMedia(req.file.path, 'branch-logos');
-    
-    // Update the branch with the new logo
-    branch.logo = {
-      url: result.url,
-      public_id: result.public_id
-    };
-    
-    await branch.save();
-    
-    // Remove the temporary file if it exists
-    if (req.file.path) {
-      fs.unlinkSync(req.file.path);
-    }
-    
-    res.json({ 
-      success: true, 
-      data: { 
-        logo: branch.logo 
-      } 
-    });
-  } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
-  }
-};
-
-// @desc    Upload branch media (photo/video)
-// @route   POST /api/branches/:id/media/upload
-// @access  Private (GymOwner)
+// @desc    Upload media (photos/videos) for a branch
+// @route   POST /api/branches/:id/media
+// @access  Private (GymOwner of the associated gym)
 export const uploadBranchMedia = async (req, res) => {
   try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
-    if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
-    }
-    
     const branch = await Branch.findById(req.params.id);
-    
     if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
+      return res.status(404).json({ message: 'Branch not found' });
     }
-    
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
-    }
-    
-    // Files are already uploaded to Cloudinary by the middleware
-    // and available as req.file or req.files
-    if (!req.files && !req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No files uploaded' 
-      });
-    }
-    
-    // Handle both single file and multiple files
-    const files = req.files || [req.file];
-    const type = req.body.type || req.fileType || 'photo';
-    const isVideo = type === 'video';
-    
-    const uploadResults = [];
-    
-    // Process each file
-    for (const file of files) {
-      // Create media object from Cloudinary response
-      let mediaObj = {
-        url: file.path, // Cloudinary URL is in path
-        public_id: file.filename, // Cloudinary public_id is in filename
-        caption: req.body.caption || file.originalname || ''
-      };
-      
-      // Save to appropriate array in branch document
-      if (type === 'logo') {
-        // If branch already has a logo, delete the old one if we have the public_id
-        if (branch.logo && branch.logo.public_id) {
-          try {
-            await deleteMedia(branch.logo.public_id);
-          } catch (err) {
-            console.error('Error deleting old logo:', err);
-            // Continue even if delete fails
-          }
-        }
-        
-        branch.logo = mediaObj;
-        uploadResults.push({
-          ...mediaObj,
-          type: 'logo'
-        });
-      } else if (isVideo) {
-        const newVideo = mediaObj;
-        branch.videos.push(newVideo);
-        uploadResults.push({
-          ...newVideo,
-          type: 'video'
-        });
-      } else {
-        const newPhoto = mediaObj;
-        branch.photos.push(newPhoto);
-        uploadResults.push({
-          ...newPhoto,
-          type: 'photo'
-        });
-      }
-    }
-    
-    await branch.save();
-    
-    res.status(200).json({ 
-      success: true, 
-      data: uploadResults
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Error uploading media' 
-    });
-  }
-};
 
-// @desc    Delete branch media
-// @route   DELETE /api/branches/:id/media/:mediaId
-// @access  Private (GymOwner)
-export const deleteBranchMedia = async (req, res) => {
-  try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
+    // Get the associated gym to check ownership
+    const gym = await Gym.findById(branch.gymId);
     if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
+      return res.status(404).json({ message: 'Associated gym not found' });
     }
-    
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
-    }
-    
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
-    }
-    
-    const mediaId = req.params.mediaId;
-    let media = branch.photos.find(p => p._id.toString() === mediaId) ||
-                branch.videos.find(v => v._id.toString() === mediaId);
-    
-    if (!media) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Media not found' 
-      });
-    }
-    
-    // Delete from Cloudinary
-    await deleteMedia(media.public_id, media.url.includes('video'));
-    
-    // Remove from branch document
-    branch.photos = branch.photos.filter(p => p._id.toString() !== mediaId);
-    branch.videos = branch.videos.filter(v => v._id.toString() !== mediaId);
-    
-    await branch.save();
-    
-    res.json({ 
-      success: true,
-      message: 'Media deleted successfully' 
-    });
-  } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
-  }
-};
 
-// @desc    Upload a photo for a branch
-// @route   POST /api/branches/:id/photos
-// @access  Private (GymOwner)
-export const uploadPhoto = async (req, res) => {
-  try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
-    if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to upload media to this branch' });
     }
+
+    // Determine media type (photo or video)
+    const mediaType = req.query.type || req.body.type || 'photo';
+    const isVideo = mediaType === 'video';
     
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
-    }
-    
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
-    }
-    
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'No files uploaded' 
-      });
-    }
-    
-    const uploadedPhotos = [];
-    
-    // Process each uploaded photo
-    for (const file of req.files) {
-      // Upload to Cloudinary
-      const result = await uploadMedia(file.path, 'branch-photos');
-      
-      // Add to branch photos
-      const photo = {
+    const uploadPromises = req.files.map(async (file) => {
+      const result = await uploadMedia(file, isVideo ? 'videos' : 'photos');
+      return {
         url: result.url,
         public_id: result.public_id,
         caption: req.body.caption || ''
       };
-      
-      branch.photos.push(photo);
-      uploadedPhotos.push(photo);
-      
-      // Remove temporary file
-      fs.unlinkSync(file.path);
+    });
+
+    const uploadedMedia = await Promise.all(uploadPromises);
+    
+    // Add to the appropriate array based on type
+    if (isVideo) {
+      branch.videos.push(...uploadedMedia);
+    } else {
+      branch.photos.push(...uploadedMedia);
     }
     
-    // Save the branch with new photos
     await branch.save();
+    res.json(branch);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Delete media from a branch
+// @route   DELETE /api/branches/:id/media/:mediaId
+// @access  Private (GymOwner of the associated gym)
+export const deleteBranchMedia = async (req, res) => {
+  try {
+    const { id, mediaId } = req.params;
+    const { type } = req.query; // 'photo' or 'video'
+    
+    const branch = await Branch.findById(id);
+    if (!branch) {
+      return res.status(404).json({ message: 'Branch not found' });
+    }
+
+    // Get the associated gym to check ownership
+    const gym = await Gym.findById(branch.gymId);
+    if (!gym) {
+      return res.status(404).json({ message: 'Associated gym not found' });
+    }
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete media from this branch' });
+    }
+
+    const mediaArray = type === 'video' ? branch.videos : branch.photos;
+    const mediaIndex = mediaArray.findIndex(item => item._id.toString() === mediaId);
+    
+    if (mediaIndex === -1) {
+      return res.status(404).json({ message: `${type} not found` });
+    }
+
+    const media = mediaArray[mediaIndex];
+    
+    // Delete from Cloudinary
+    if (media.public_id) {
+      await deleteMedia(media.public_id, type === 'video');
+    }
+
+    // Remove from the branch document
+    if (type === 'video') {
+      branch.videos.splice(mediaIndex, 1);
+    } else {
+      branch.photos.splice(mediaIndex, 1);
+    }
+    
+    await branch.save();
+    res.json({ message: `${type} deleted successfully` });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Join a branch as a member
+// @route   POST /api/branches/:id/join
+// @access  Private (Member)
+export const joinBranch = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subscriptionId } = req.body;
+    
+    // Verify branch exists and is active
+    const branch = await Branch.findById(id);
+    if (!branch) {
+      return res.status(404).json({ message: 'Branch not found' });
+    }
+    
+    if (branch.status !== 'active') {
+      return res.status(400).json({ message: 'This branch is not currently accepting new members' });
+    }
+
+    // Verify gym exists and is active
+    const gym = await Gym.findById(branch.gymId);
+    if (!gym || gym.status !== 'active') {
+      return res.status(400).json({ message: 'The gym associated with this branch is not active' });
+    }
+
+    // Check if user is already a member of this branch
+    const existingMembership = await BranchMembership.findOne({
+      userId: req.user._id,
+      branchId: id
+    });
+
+    if (existingMembership && existingMembership.status === 'active') {
+      return res.status(400).json({ message: 'You are already a member of this branch' });
+    }
+
+    // If subscription is provided, validate it
+    let subscription = null;
+    if (subscriptionId) {
+      subscription = await UserSubscription.findById(subscriptionId)
+        .populate('planId');
+        
+      if (!subscription) {
+        return res.status(404).json({ message: 'Subscription not found' });
+      }
+      
+      if (subscription.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'This subscription does not belong to you' });
+      }
+      
+      if (subscription.status !== 'active') {
+        return res.status(400).json({ message: 'This subscription is not active' });
+      }
+      
+      // Verify subscription is for this gym/branch
+      if (subscription.gymId.toString() !== branch.gymId.toString()) {
+        return res.status(400).json({ message: 'This subscription is not valid for this gym' });
+      }
+      
+      // If branch-specific subscription, make sure it matches
+      if (subscription.branchId && subscription.branchId.toString() !== id) {
+        return res.status(400).json({ message: 'This subscription is for a different branch' });
+      }
+    }
+    
+    // Create new membership or reactivate existing one
+    let membership;
+    
+    if (existingMembership) {
+      // Update existing membership
+      existingMembership.status = 'active';
+      existingMembership.subscriptionId = subscriptionId || existingMembership.subscriptionId;
+      existingMembership.joinDate = new Date();
+      
+      membership = await existingMembership.save();
+    } else {
+      // Create new membership
+      membership = await BranchMembership.create({
+        userId: req.user._id,
+        branchId: id,
+        gymId: branch.gymId,
+        subscriptionId: subscriptionId || null,
+        status: 'active'
+      });
+      
+      // Update branch member count
+      branch.memberCount += 1;
+      await branch.save();
+      
+      // Update gym total members count
+      gym.totalMembers += 1;
+      await gym.save();
+    }
     
     res.status(201).json({
       success: true,
-      data: uploadedPhotos
+      message: 'Successfully joined the branch',
+      membership
     });
   } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(400).json({ message: error.message });
   }
 };
 
-// @desc    Delete a photo from a branch
-// @route   DELETE /api/branches/:id/photos/:photoId
-// @access  Private (GymOwner)
-export const deletePhoto = async (req, res) => {
+// @desc    Get all members of a branch
+// @route   GET /api/branches/:id/members
+// @access  Private (GymOwner, Manager)
+export const getBranchMembers = async (req, res) => {
   try {
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
+    const { id } = req.params;
+    const { page = 1, limit = 20, status } = req.query;
     
+    // Verify branch exists
+    const branch = await Branch.findById(id);
+    if (!branch) {
+      return res.status(404).json({ message: 'Branch not found' });
+    }
+    
+    // Get the associated gym to check ownership
+    const gym = await Gym.findById(branch.gymId);
     if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
+      return res.status(404).json({ message: 'Associated gym not found' });
     }
     
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
+    // Check authorization - only gym owner or branch manager can see members
+    if (
+      gym.ownerId.toString() !== req.user._id.toString() &&
+      (!branch.manager || branch.manager.toString() !== req.user._id.toString()) &&
+      req.user.role !== 'superadmin'
+    ) {
+      return res.status(403).json({ message: 'Not authorized to view branch members' });
     }
     
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
+    // Build query
+    const query = { branchId: id };
+    if (status) {
+      query.status = status;
     }
     
-    // Find the photo by ID
-    const photoIndex = branch.photos.findIndex(
-      (photo) => photo._id.toString() === req.params.photoId
-    );
+    // Pagination
+    const options = {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      sort: { joinDate: -1 },
+      populate: [
+        { path: 'userId', select: 'name email profileImage' },
+        { path: 'subscriptionId', populate: { path: 'planId', select: 'name price' } }
+      ]
+    };
     
-    if (photoIndex === -1) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Photo not found' 
-      });
-    }
+    // Get paginated results
+    const memberships = await BranchMembership.find(query)
+      .populate('userId', 'name email profileImage')
+      .populate({
+        path: 'subscriptionId',
+        populate: { path: 'planId', select: 'name price' }
+      })
+      .sort('-joinDate')
+      .skip((options.page - 1) * options.limit)
+      .limit(options.limit);
     
-    // Get the photo to delete
-    const photoToDelete = branch.photos[photoIndex];
+    // Get total count
+    const total = await BranchMembership.countDocuments(query);
     
-    // Delete from Cloudinary
-    await deleteMedia(photoToDelete.public_id);
-    
-    // Remove from branch document
-    branch.photos.splice(photoIndex, 1);
-    await branch.save();
-    
-    res.json({ 
-      success: true,
-      message: 'Photo deleted successfully' 
+    res.json({
+      memberships,
+      pagination: {
+        total,
+        page: options.page,
+        pages: Math.ceil(total / options.limit),
+        limit: options.limit
+      }
     });
   } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Add a member to a branch
-// @route   POST /api/branches/:id/members
-// @access  Private (GymOwner)
-export const addMember = async (req, res) => {
+// @desc    Get stats for a branch
+// @route   GET /api/branches/:id/stats
+// @access  Private (GymOwner, Manager)
+export const getBranchStats = async (req, res) => {
   try {
-    const { memberId } = req.body;
+    const { id } = req.params;
     
-    if (!memberId) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Member ID is required' 
-      });
+    // Verify branch exists
+    const branch = await Branch.findById(id);
+    if (!branch) {
+      return res.status(404).json({ message: 'Branch not found' });
     }
     
-    // Find the gym owned by this user
-    const gym = await Gym.findOne({ ownerId: req.user._id });
-    
+    // Get the associated gym to check ownership
+    const gym = await Gym.findById(branch.gymId);
     if (!gym) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'No gym found for this user' 
-      });
+      return res.status(404).json({ message: 'Associated gym not found' });
     }
     
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
+    // Check authorization - only gym owner or branch manager can see stats
+    if (
+      gym.ownerId.toString() !== req.user._id.toString() &&
+      (!branch.manager || branch.manager.toString() !== req.user._id.toString()) &&
+      req.user.role !== 'superadmin'
+    ) {
+      return res.status(403).json({ message: 'Not authorized to view branch statistics' });
     }
     
-    // Ensure the branch belongs to the user's gym
-    if (branch.gymId.toString() !== gym._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
+    // Get member counts
+    const totalMembers = await BranchMembership.countDocuments({ branchId: id });
+    const activeMembers = await BranchMembership.countDocuments({ branchId: id, status: 'active' });
+    
+    // Get subscription stats
+    const subscriptionStats = await BranchMembership.aggregate([
+      { $match: { branchId: mongoose.Types.ObjectId(id) } },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+    
+    // Format subscription stats
+    const statusCounts = {};
+    subscriptionStats.forEach(stat => {
+      statusCounts[stat._id] = stat.count;
+    });
+    
+    // Get check-in stats
+    const today = new Date();
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    const checkInsToday = await BranchMembership.countDocuments({
+      branchId: id,
+      lastCheckIn: { $gte: startOfDay }
+    });
+    
+    // Get revenue stats from subscriptions
+    const subscriptions = await UserSubscription.find({
+      branchId: id,
+      status: 'active',
+      paymentStatus: 'completed'
+    }).populate('planId');
+    
+    let totalRevenue = 0;
+    if (subscriptions.length > 0) {
+      totalRevenue = subscriptions.reduce((sum, sub) => {
+        return sum + (sub.planId ? sub.planId.price : 0);
+      }, 0);
     }
     
-    // Check if member is already in this branch
-    if (branch.members.includes(memberId)) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Member is already assigned to this branch' 
-      });
-    }
-    
-    // Add member to branch
-    branch.members.push(memberId);
-    await branch.save();
-    
-    res.status(200).json({
-      success: true,
-      message: 'Member added to branch successfully',
-      data: branch.members
+    res.json({
+      totalMembers,
+      activeMembers,
+      statusCounts,
+      checkInsToday,
+      totalRevenue,
+      subscriptionCount: subscriptions.length
     });
   } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
-  }
-};
-
-// @desc    Remove a member from a branch
-// @route   DELETE /api/branches/:id/members/:memberId
-// @access  Private (GymOwner)
-export const removeMember = async (req, res) => {
-  try {
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
-    }
-    
-    // Check authorization
-    const gym = await Gym.findById(branch.gymId);
-    if (gym.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
-    }
-    
-    // Check if member is in this branch
-    const memberIndex = branch.members.indexOf(req.params.memberId);
-    if (memberIndex === -1) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Member is not assigned to this branch' 
-      });
-    }
-    
-    // Remove member from branch
-    branch.members.splice(memberIndex, 1);
-    await branch.save();
-    
-    res.status(200).json({
-      success: true,
-      message: 'Member removed from branch successfully',
-      data: branch.members
-    });
-  } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
-  }
-};
-
-// @desc    Reassign a member to another branch
-// @route   PUT /api/branches/:id/members/:memberId/reassign
-// @access  Private (GymOwner)
-export const reassignMember = async (req, res) => {
-  try {
-    const { targetBranchId } = req.body;
-    
-    if (!targetBranchId) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Target branch ID is required' 
-      });
-    }
-    
-    // Get source branch
-    const sourceBranch = await Branch.findById(req.params.id);
-    if (!sourceBranch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Source branch not found' 
-      });
-    }
-    
-    // Get target branch
-    const targetBranch = await Branch.findById(targetBranchId);
-    if (!targetBranch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Target branch not found' 
-      });
-    }
-    
-    // Check authorization for both branches
-    const sourceGym = await Gym.findById(sourceBranch.gymId);
-    const targetGym = await Gym.findById(targetBranch.gymId);
-    
-    if (sourceGym.ownerId.toString() !== req.user._id.toString() ||
-        targetGym.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update these branches' 
-      });
-    }
-    
-    const memberId = req.params.memberId;
-    
-    // Check if member is in source branch
-    const memberIndexInSource = sourceBranch.members.indexOf(memberId);
-    if (memberIndexInSource === -1) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Member is not assigned to the source branch' 
-      });
-    }
-    
-    // Check if member is already in target branch
-    if (targetBranch.members.includes(memberId)) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Member is already assigned to the target branch' 
-      });
-    }
-    
-    // Remove from source branch
-    sourceBranch.members.splice(memberIndexInSource, 1);
-    await sourceBranch.save();
-    
-    // Add to target branch
-    targetBranch.members.push(memberId);
-    await targetBranch.save();
-    
-    res.status(200).json({
-      success: true,
-      message: 'Member reassigned successfully'
-    });
-  } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
-  }
-};
-
-// @desc    Add a trainer to a branch
-// @route   POST /api/branches/:id/trainers
-// @access  Private (GymOwner)
-export const addTrainer = async (req, res) => {
-  try {
-    const { trainerId } = req.body;
-    
-    if (!trainerId) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Trainer ID is required' 
-      });
-    }
-    
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
-    }
-    
-    // Check authorization
-    const gym = await Gym.findById(branch.gymId);
-    if (gym.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
-    }
-    
-    // Check if trainer is already in this branch
-    if (branch.trainers.includes(trainerId)) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Trainer is already assigned to this branch' 
-      });
-    }
-    
-    // Add trainer to branch
-    branch.trainers.push(trainerId);
-    await branch.save();
-    
-    res.status(200).json({
-      success: true,
-      message: 'Trainer added to branch successfully',
-      data: branch.trainers
-    });
-  } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
-  }
-};
-
-// @desc    Remove a trainer from a branch
-// @route   DELETE /api/branches/:id/trainers/:trainerId
-// @access  Private (GymOwner)
-export const removeTrainer = async (req, res) => {
-  try {
-    const branch = await Branch.findById(req.params.id);
-    
-    if (!branch) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Branch not found' 
-      });
-    }
-    
-    // Check authorization
-    const gym = await Gym.findById(branch.gymId);
-    if (gym.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this branch' 
-      });
-    }
-    
-    // Check if trainer is in this branch
-    const trainerIndex = branch.trainers.indexOf(req.params.trainerId);
-    if (trainerIndex === -1) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Trainer is not assigned to this branch' 
-      });
-    }
-    
-    // Remove trainer from branch
-    branch.trainers.splice(trainerIndex, 1);
-    await branch.save();
-    
-    res.status(200).json({
-      success: true,
-      message: 'Trainer removed from branch successfully',
-      data: branch.trainers
-    });
-  } catch (error) {
-    res.status(400).json({ 
-      success: false,
-      message: error.message 
-    });
+    res.status(500).json({ message: error.message });
   }
 }; 

@@ -19,6 +19,11 @@ import {
   getFeaturedGyms,
   toggleFeaturedStatus
 } from '../controllers/gymController.js';
+import { getGymBranches } from '../controllers/branchController.js';
+import { 
+  getGymSubscriptionPlans,
+  getSubscriptionStats 
+} from '../controllers/subscriptionController.js';
 import { protect, authorize } from '../middlewares/auth.js';
 import { gymUpload } from '../middlewares/uploadMiddleware.js';
 
@@ -29,6 +34,8 @@ router.get('/', getGyms);
 router.get('/active', getActiveGyms);
 router.get('/featured', getFeaturedGyms);
 router.get('/:id', getGym);
+router.get('/:gymId/branches', getGymBranches);
+router.get('/:gymId/subscription-plans', getGymSubscriptionPlans);
 
 // Protected routes (need to be logged in)
 router.use(protect);
@@ -49,6 +56,7 @@ router.post('/', authorize('gymOwner'), createGym);
 router.put('/:id', authorize('gymOwner'), updateGym);
 router.delete('/:id', authorize('gymOwner'), deleteGym);
 router.get('/:id/stats', authorize('gymOwner', 'superadmin'), getGymStats);
+router.get('/:gymId/subscriptions/stats', authorize('gymOwner'), getSubscriptionStats);
 
 // Media routes with enhanced upload middleware
 router.post(

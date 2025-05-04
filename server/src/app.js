@@ -19,6 +19,8 @@ import orderRoutes from './routes/orderRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import branchRoutes from './routes/branchRoutes.js';
 import coinRoutes from './routes/coinRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
 dotenv.config();
 
@@ -73,6 +75,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin', superAdminRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/coins', coinRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/users', userRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

@@ -116,12 +116,43 @@ const gymSchema = new mongoose.Schema({
     enum: ['pending', 'active', 'banned'],
     default: 'pending'
   },
+  // New fields for subscriptions and statistics
+  totalMembers: {
+    type: Number,
+    default: 0
+  },
+  totalSubscriptions: {
+    type: Number,
+    default: 0
+  },
+  activeSubscriptions: {
+    type: Number,
+    default: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+// Virtual for branches - fetches all branches associated with this gym
+gymSchema.virtual('branches', {
+  ref: 'Branch',
+  localField: '_id',
+  foreignField: 'gymId',
+  options: { sort: { branchName: 1 } }
+});
+
+// Virtual for subscriptions - fetches all subscription plans for this gym
+gymSchema.virtual('subscriptionPlans', {
+  ref: 'SubscriptionPlan',
+  localField: '_id',
+  foreignField: 'gymId',
+  match: { isActive: true }
 });
 
 // Add index for faster queries

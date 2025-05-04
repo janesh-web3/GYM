@@ -48,7 +48,15 @@ export const getGyms = async (req, res) => {
 export const getGym = async (req, res) => {
   try {
     const gym = await Gym.findById(req.params.id)
-      .populate('ownerId', 'name email');
+      .populate('ownerId', 'name email')
+      .populate({
+        path: 'branches',
+        select: 'branchName address status photos description memberCount'
+      })
+      .populate({
+        path: 'subscriptionPlans',
+        match: { isActive: true }
+      });
 
     if (!gym) {
       return res.status(404).json({ message: 'Gym not found' });

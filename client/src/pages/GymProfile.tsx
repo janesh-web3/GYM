@@ -5,6 +5,7 @@ import { getGymDetails, joinGym, checkMembershipStatus } from '../services/gymSe
 import { FaMapMarkerAlt, FaPhone, FaEnvelope, FaGlobe, FaClock, FaCheckCircle, FaSpinner } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import BranchList from '../components/BranchList';
 
 interface MembershipStatus {
   isMember: boolean;
@@ -25,33 +26,33 @@ const GymProfile = () => {
   const [activeMediaType, setActiveMediaType] = useState<'photos' | 'videos'>('photos');
   const [selectedMedia, setSelectedMedia] = useState<number>(0);
 
-  useEffect(() => {
-    const fetchGymDetails = async () => {
-      try {
-        setLoading(true);
-        if (!id) return;
-        
-        const gymData = await getGymDetails(id) as Gym;
-        setGym(gymData);
-        
-        // Check membership status if user is logged in
-        if (isAuthenticated) {
-          try {
-            const memberStatus = await checkMembershipStatus(id) as MembershipStatus;
-            setMembershipStatus(memberStatus);
-          } catch (err) {
-            console.error('Error checking membership:', err);
-          }
+  const fetchGymDetails = async () => {
+    try {
+      setLoading(true);
+      if (!id) return;
+      
+      const gymData = await getGymDetails(id) as Gym;
+      setGym(gymData);
+      
+      // Check membership status if user is logged in
+      if (isAuthenticated) {
+        try {
+          const memberStatus = await checkMembershipStatus(id) as MembershipStatus;
+          setMembershipStatus(memberStatus);
+        } catch (err) {
+          console.error('Error checking membership:', err);
         }
-        
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching gym details:', err);
-        setError('Failed to load gym details. Please try again later.');
-        setLoading(false);
       }
-    };
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching gym details:', err);
+      setError('Failed to load gym details. Please try again later.');
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchGymDetails();
   }, [id, isAuthenticated]);
 
@@ -86,7 +87,7 @@ const GymProfile = () => {
     return (
       <div className="flex items-start">
         <span className="mt-1 mr-2 text-gray-500 flex-shrink-0">
-          <FaMapMarkerAlt />
+          <FaMapMarkerAlt size={16} />
         </span>
         <div>
           {gym.address.street}, {gym.address.city}, {gym.address.state} {gym.address.zipCode}, {gym.address.country}
@@ -102,7 +103,7 @@ const GymProfile = () => {
         {gym.phoneNumber && (
           <div className="flex items-center">
             <span className="mr-2 text-gray-500">
-              <FaPhone />
+              <FaPhone size={16} />
             </span>
             <a href={`tel:${gym.phoneNumber}`} className="text-primary-600 hover:text-primary-800">
               {gym.phoneNumber}
@@ -112,7 +113,7 @@ const GymProfile = () => {
         {gym.email && (
           <div className="flex items-center">
             <span className="mr-2 text-gray-500">
-              <FaEnvelope />
+              <FaEnvelope size={16} />
             </span>
             <a href={`mailto:${gym.email}`} className="text-primary-600 hover:text-primary-800">
               {gym.email}
@@ -122,7 +123,7 @@ const GymProfile = () => {
         {gym.website && (
           <div className="flex items-center">
             <span className="mr-2 text-gray-500">
-              <FaGlobe />
+              <FaGlobe size={16} />
             </span>
             <a 
               href={gym.website.startsWith('http') ? gym.website : `https://${gym.website}`} 
@@ -137,7 +138,7 @@ const GymProfile = () => {
         {gym.workingHours && (
           <div className="flex items-center">
             <span className="mr-2 text-gray-500">
-              <FaClock />
+              <FaClock size={16} />
             </span>
             <span>
               {gym.workingHours.openTime} - {gym.workingHours.closeTime}
@@ -199,32 +200,37 @@ const GymProfile = () => {
               />
             </div>
           )}
-          
-          {media[selectedMedia]?.caption && (
-            <p className="mt-2 text-sm text-gray-500 italic">
-              {media[selectedMedia].caption}
-            </p>
-          )}
         </div>
         
-        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-          {media.map((item, idx) => (
-            <div 
-              key={idx}
-              className={`aspect-w-1 aspect-h-1 rounded-md overflow-hidden cursor-pointer ${selectedMedia === idx ? 'ring-2 ring-primary-500' : ''}`}
-              onClick={() => setSelectedMedia(idx)}
+        <div className="grid grid-cols-5 gap-2">
+          {media.map((item, index) => (
+            <div
+              key={index}
+              className={`cursor-pointer rounded-md overflow-hidden h-16 ${
+                selectedMedia === index
+                  ? 'ring-2 ring-primary-600'
+                  : 'hover:opacity-80'
+              }`}
+              onClick={() => setSelectedMedia(index)}
             >
               {activeMediaType === 'photos' ? (
-                <img 
-                  src={item.url} 
-                  alt={item.caption || `Thumbnail ${idx + 1}`}
+                <img
+                  src={item.url}
+                  alt={item.caption || `Thumbnail ${index + 1}`}
                   className="object-cover w-full h-full"
                 />
               ) : (
-                <div className="bg-gray-100 w-full h-full flex items-center justify-center">
-                  <svg className="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zm4 3a1 1 0 100 2h8a1 1 0 100-2H6z" />
-                  </svg>
+                <div className="relative bg-gray-800 w-full h-full flex items-center justify-center">
+                  <img
+                    src={gym.photos && gym.photos.length > 0 ? gym.photos[0].url : ''}
+                    alt={item.caption || `Video thumbnail ${index + 1}`}
+                    className="object-cover w-full h-full opacity-50"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-6 h-6 bg-white bg-opacity-80 rounded-full flex items-center justify-center">
+                      <div className="w-0 h-0 border-y-4 border-y-transparent border-l-6 border-l-primary-600 ml-0.5"></div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -234,146 +240,195 @@ const GymProfile = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
-        <span className="h-10 w-10 text-primary-600 animate-spin">
-          <FaSpinner />
-        </span>
-      </div>
-    );
-  }
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center items-center py-12">
+          <FaSpinner size={32} className="animate-spin text-primary-600" />
+        </div>
+      );
+    }
 
-  if (error || !gym) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error</h2>
-          <p className="text-red-500">{error || 'Gym not found'}</p>
+    if (error) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-red-500">{error}</p>
           <button
-            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-            onClick={() => navigate('/explore-gyms')}
+            onClick={() => window.location.reload()}
+            className="mt-4 text-primary-600 hover:text-primary-800"
           >
-            Back to Gyms
+            Try Again
           </button>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-          {/* Header with gym logo/image */}
-          <div className="relative h-64 bg-gray-200">
-            {gym.logo?.url ? (
-              <img
-                src={gym.logo.url}
-                alt={gym.gymName}
-                className="w-full h-full object-cover"
-              />
-            ) : gym.photos && gym.photos.length > 0 ? (
-              <img
-                src={gym.photos[0].url}
-                alt={gym.gymName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-300">
-                <span className="text-2xl text-gray-600">No image available</span>
-              </div>
-            )}
+    if (!gym) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-500">Gym not found.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left column - Basic info */}
+        <div className="lg:col-span-1">
+          <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">{gym.gymName}</h2>
             
-            {/* Overlay with gym name */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent text-white p-6">
-              <h1 className="text-3xl font-bold">{gym.gymName}</h1>
-            </div>
-          </div>
-          
-          <div className="p-6">
-            <div className="flex flex-wrap md:flex-nowrap">
-              {/* Left column: Gym info */}
-              <div className="w-full md:w-1/3 md:pr-8 mb-6 md:mb-0">
-                <div className="mb-6">
-                  <h2 className="text-xl font-semibold mb-2">Location</h2>
-                  {renderAddress()}
-                  {renderContact()}
-                </div>
-                
-                <div className="mb-6">
-                  <h2 className="text-xl font-semibold mb-2">About</h2>
-                  <p className="text-gray-700">{gym.description}</p>
-                </div>
-                
-                <div className="mb-6">
-                  <h2 className="text-xl font-semibold mb-2">Services</h2>
-                  <div className="flex flex-wrap gap-2">
-                    {gym.services.map((service, idx) => (
-                      <div 
-                        key={idx}
-                        className="bg-gray-100 rounded-full px-3 py-1 text-sm"
-                      >
-                        {service.name}
-                        {service.price && <span className="ml-1 font-medium">${service.price}</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Join Gym Button */}
-                <div>
+            {renderAddress()}
+            {renderContact()}
+            
+            <div className="mt-6">
+              {user && user.role === 'member' && (
+                <div className="mb-4">
                   {membershipStatus.isMember ? (
-                    <div className="flex items-center text-green-600 bg-green-50 px-4 py-2 rounded-md">
-                      <span className="mr-2">
-                        <FaCheckCircle />
-                      </span>
-                      <span>You are a member of this gym</span>
+                    <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-center">
+                      <FaCheckCircle size={18} className="text-green-500 mr-2" />
+                      <div>
+                        <p className="text-green-800 font-medium">
+                          You are a member of this gym
+                        </p>
+                        {membershipStatus.joinedDate && (
+                          <p className="text-green-600 text-sm">
+                            Joined on{' '}
+                            {new Date(membershipStatus.joinedDate).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <button
                       onClick={handleJoinGym}
-                      disabled={Boolean(joiningGym || !isAuthenticated || (user && user.role !== 'member'))}
-                      className={`w-full flex justify-center items-center px-4 py-2 rounded-md shadow-sm text-white
-                        ${joiningGym ? 'bg-gray-400 cursor-wait' : 'bg-primary-600 hover:bg-primary-700'}
-                        ${(!isAuthenticated || (user && user.role !== 'member')) ? 'opacity-50 cursor-not-allowed' : ''}
-                      `}
+                      disabled={joiningGym}
+                      className={`w-full py-2 px-4 rounded-md text-white font-medium ${
+                        joiningGym
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-primary-600 hover:bg-primary-700'
+                      }`}
                     >
                       {joiningGym ? (
-                        <>
-                          <span className="animate-spin mr-2 h-4 w-4">
-                            <FaSpinner />
-                          </span>
+                        <span className="flex items-center justify-center">
+                          <FaSpinner size={16} className="animate-spin mr-2" />
                           Joining...
-                        </>
+                        </span>
                       ) : (
                         'Join Gym'
                       )}
                     </button>
                   )}
-                  
-                  {!isAuthenticated && (
-                    <p className="mt-2 text-sm text-gray-500">
-                      Please log in as a member to join this gym
-                    </p>
-                  )}
-                  
-                  {isAuthenticated && user && user.role !== 'member' && (
-                    <p className="mt-2 text-sm text-gray-500">
-                      Only members can join gyms
-                    </p>
-                  )}
                 </div>
-              </div>
+              )}
               
-              {/* Right column: Media gallery */}
-              <div className="w-full md:w-2/3 md:pl-8 border-t pt-6 md:pt-0 md:border-t-0 md:border-l border-gray-200">
-                <h2 className="text-xl font-semibold mb-4">Media Gallery</h2>
-                {renderMediaGallery()}
-              </div>
+              {gym.isApproved && gym.status === 'active' ? (
+                <div className="flex items-center text-green-600">
+                  <FaCheckCircle size={16} className="mr-2" />
+                  <span>Active Gym</span>
+                </div>
+              ) : (
+                <div className="flex items-center text-yellow-600">
+                  <FaSpinner size={16} className="mr-2" />
+                  <span>{gym.status === 'pending' ? 'Pending Approval' : 'Inactive'}</span>
+                </div>
+              )}
             </div>
           </div>
+          
+          {/* Description */}
+          <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">About</h3>
+            <p className="text-gray-600">{gym.description}</p>
+          </div>
         </div>
+        
+        {/* Right column - Media and branches */}
+        <div className="lg:col-span-2">
+          {/* Media gallery */}
+          <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">Gallery</h3>
+            {renderMediaGallery()}
+          </div>
+          
+          {/* Services */}
+          {gym.services && gym.services.length > 0 && (
+            <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">Services</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {gym.services.map((service, index) => (
+                  <div key={index} className="border border-gray-200 rounded-md p-4">
+                    <h4 className="font-medium text-gray-800">{service.name}</h4>
+                    {service.description && <p className="text-gray-600 text-sm mt-1">{service.description}</p>}
+                    {service.price && (
+                      <div className="mt-2 text-primary-600 font-semibold">${service.price.toFixed(2)}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Branches */}
+          <div className="bg-white shadow-md rounded-lg p-6 mb-6">
+            {gym.branches && gym.branches.length > 0 ? (
+              <BranchList 
+                branches={gym.branches} 
+                gymId={gym._id} 
+                refreshGymData={fetchGymDetails}
+              />
+            ) : (
+              <>
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Branches</h3>
+                <div className="bg-gray-50 rounded-lg p-6 text-center">
+                  <p className="text-gray-500">This gym doesn't have any branches yet.</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-gray-100 min-h-screen">
+      <div className="container mx-auto px-4 py-8">
+        {gym && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+            {/* Hero image */}
+            <div className="h-48 md:h-64 lg:h-80 bg-gray-300 relative">
+              {gym.photos && gym.photos.length > 0 ? (
+                <img
+                  src={gym.photos[0].url}
+                  alt={gym.gymName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-r from-primary-100 to-primary-200">
+                  <h1 className="text-2xl font-bold text-primary-800">{gym.gymName}</h1>
+                </div>
+              )}
+              
+              {/* Logo overlay */}
+              {gym.logo && (
+                <div className="absolute bottom-0 left-0 transform translate-y-1/2 ml-6 md:ml-8">
+                  <div className="h-16 w-16 md:h-24 md:w-24 rounded-full overflow-hidden border-4 border-white bg-white shadow-md">
+                    <img
+                      src={gym.logo.url}
+                      alt={`${gym.gymName} logo`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6">
+              {renderContent()}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

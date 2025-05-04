@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Gym, GymMembership } from '../types/Role';
+import { SubscriptionPlan } from './subscriptionService';
 
 const API_URL = '/api/gyms';
 
@@ -25,7 +26,7 @@ export const joinGym = async (gymId: string) => {
     {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`
       }
     }
   );
@@ -38,7 +39,7 @@ export const checkMembershipStatus = async (gymId: string) => {
     `${API_URL}/${gymId}/membership-status`,
     {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`
       }
     }
   );
@@ -51,7 +52,7 @@ export const getUserGymMemberships = async () => {
     `${API_URL}/memberships`,
     {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`
       }
     }
   );
@@ -74,7 +75,7 @@ export const toggleFeaturedStatus = async (gymId: string, isFeatured: boolean) =
     {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`
       }
     }
   );
@@ -87,4 +88,19 @@ export const getAllGyms = async (status = '') => {
     params: { status }
   });
   return { data: response.data };
+};
+
+// Get a gym's branches
+export const getGymBranches = async (gymId: string) => {
+  const response = await axios.get(`${API_URL}/${gymId}/branches`);
+  return response.data;
+};
+
+// Get a gym's subscription plans
+export const getGymSubscriptionPlans = async (gymId: string, branchId?: string) => {
+  const url = `${API_URL}/${gymId}/subscription-plans`;
+  const params = branchId ? { branchId } : {};
+  
+  const response = await axios.get(url, { params });
+  return response.data as SubscriptionPlan[];
 }; 
