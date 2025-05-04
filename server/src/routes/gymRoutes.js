@@ -11,7 +11,13 @@ import {
   uploadVideos,
   deleteGymMedia,
   uploadLogo,
-  uploadGymMedia
+  uploadGymMedia,
+  getActiveGyms,
+  joinGym,
+  checkMembershipStatus,
+  getUserGymMemberships,
+  getFeaturedGyms,
+  toggleFeaturedStatus
 } from '../controllers/gymController.js';
 import { protect, authorize } from '../middlewares/auth.js';
 import { gymUpload } from '../middlewares/uploadMiddleware.js';
@@ -20,19 +26,29 @@ const router = express.Router();
 
 // Public routes
 router.get('/', getGyms);
+router.get('/active', getActiveGyms);
+router.get('/featured', getFeaturedGyms);
 router.get('/:id', getGym);
 
 // Protected routes (need to be logged in)
 router.use(protect);
 
+// Routes for gym membership
+router.post('/:id/join', authorize('member'), joinGym);
+router.get('/:id/membership-status', checkMembershipStatus);
+router.get('/memberships', getUserGymMemberships);
+
+// Routes restricted to superadmins only
+router.patch('/:id/featured', authorize('superadmin'), toggleFeaturedStatus);
+
 // Routes restricted to admins only
-router.put('/:id/status', authorize('admin'), updateGymStatus);
+router.put('/:id/status', authorize('superadmin'), updateGymStatus);
 
 // Routes restricted to gym owners
 router.post('/', authorize('gymOwner'), createGym);
 router.put('/:id', authorize('gymOwner'), updateGym);
 router.delete('/:id', authorize('gymOwner'), deleteGym);
-router.get('/:id/stats', authorize('gymOwner', 'admin'), getGymStats);
+router.get('/:id/stats', authorize('gymOwner', 'superadmin'), getGymStats);
 
 // Media routes with enhanced upload middleware
 router.post(

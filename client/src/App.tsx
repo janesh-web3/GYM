@@ -5,6 +5,7 @@ import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ExploreGyms from "./pages/ExploreGyms";
+import GymProfile from "./pages/GymProfile";
 import AppLayout from "./layouts/AppLayout";
 import Dashboard from "./pages/gym/Dashboard";
 import EditProfile from "./pages/gym/EditProfile";
@@ -31,6 +32,7 @@ import PremiumMembership from "./pages/member/PremiumMembership";
 
 // React Toastify
 import { ToastContainer } from "react-toastify";
+import { Toaster } from "react-hot-toast";
 
 // Trainer components
 import TrainerDashboard from "./pages/trainer/Dashboard";
@@ -55,7 +57,8 @@ const AppRoutes = () => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/explore" element={<ExploreGyms />} />
+        <Route path="/explore-gyms" element={<ExploreGyms />} />
+        <Route path="/gyms/:id" element={<GymProfile />} />
       </Route>
 
       {/* Gym Owner Routes */}
@@ -167,6 +170,7 @@ function App() {
           theme="light"
           aria-label="Notifications"
         />
+        <Toaster position="top-right" />
       </AuthProvider>
     </Router>
   );

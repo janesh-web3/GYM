@@ -13,6 +13,9 @@ const api = axios.create({
   timeout: 30000, // 30 seconds
 });
 
+// Utility function for delay (used in retries)
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 // Types for authentication
 interface AuthTokens {
   accessToken: string;
@@ -84,10 +87,31 @@ api.interceptors.response.use(
     
     const originalRequest = error.config;
     
+    // Handle rate limiting (429 Too Many Requests)
+    if (error.response?.status === 429 && !originalRequest._rateRetry) {
+      // Get retry count or initialize it
+      originalRequest._rateRetryCount = originalRequest._rateRetryCount || 0;
+      
+      // Only retry up to 3 times for rate limiting
+      if (originalRequest._rateRetryCount < 3) {
+        originalRequest._rateRetryCount++;
+        
+        // Exponential backoff: wait longer for each retry attempt
+        const delayMs = 1000 * Math.pow(2, originalRequest._rateRetryCount - 1);
+        console.log(`Rate limited. Retrying in ${delayMs}ms (attempt ${originalRequest._rateRetryCount}/3)...`);
+        
+        // Wait before retrying
+        await sleep(delayMs);
+        
+        // Retry the request
+        return api(originalRequest);
+      }
+    }
+    
     // Handle 401 errors (unauthorized) - could be expired token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._authRetry) {
       // Mark this request as retried to prevent infinite retry loops
-      originalRequest._retry = true;
+      originalRequest._authRetry = true;
       
       const refreshToken = localStorage.getItem('refreshToken');
       const errorMsg = error.response?.data?.message || 'Session expired';
@@ -154,17 +178,33 @@ api.interceptors.response.use(
   }
 );
 
-// Generic request function with error handling
-export const apiRequest = async (options) => {
+// Generic request function with error handling and retry for rate limiting
+export const apiRequest = async (options, retryCount = 0, maxRetries = 3) => {
   try {
     const response = await api(options);
     return response.data;
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response) {
-      // Extract error message from response
-      const errorMessage = error.response.data?.message || error.message;
-      throw new Error(errorMessage);
+    if (axios.isAxiosError(error)) {
+      // Handle rate limiting separately from the interceptor
+      // This offers another layer of protection
+      if (error.response?.status === 429 && retryCount < maxRetries) {
+        const delayMs = 1000 * Math.pow(2, retryCount);
+        console.log(`API request rate limited. Retrying in ${delayMs}ms (attempt ${retryCount + 1}/${maxRetries})...`);
+        
+        // Wait before retrying
+        await sleep(delayMs);
+        
+        // Retry with incremented counter
+        return apiRequest(options, retryCount + 1, maxRetries);
+      }
+      
+      if (error.response) {
+        // Extract error message from response
+        const errorMessage = error.response.data?.message || error.message;
+        throw new Error(errorMessage);
+      }
     }
+    
     // Handle non-axios errors
     if (error instanceof Error) {
       throw error;

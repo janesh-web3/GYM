@@ -33,11 +33,30 @@ app.use(compression()); // Compress responses
 app.use(morgan('dev')); // Logging
 
 // Rate limiting
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Use different rate limits for development vs production
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: isProduction ? 100 : 1000, // Higher limit for development
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
+
+// Apply rate limiting to all routes
 app.use(limiter);
+
+// Additional more lenient rate limit for specific endpoints that might be called frequently during development
+const apiLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: isProduction ? 50 : 500, // Higher limit for development
+  message: 'Too many API requests from this IP, please try again after 5 minutes'
+});
+
+// Apply the more specific rate limiter to auth routes
+app.use('/api/auth', apiLimiter);
+app.use('/api/gyms', apiLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -9,11 +9,12 @@ import {
   ChevronDown,
   Loader,
   AlertCircle,
-  Ban
+  Ban,
+  Star
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { showError, showSuccess } from '../../utils/toast';
-import { adminService } from '../../lib/services';
+import { adminService } from '../../services';
 
 interface Gym {
   _id: string;
@@ -27,6 +28,7 @@ interface Gym {
     state: string;
   };
   status: 'active' | 'pending' | 'banned';
+  isFeatured: boolean;
   createdAt: string;
   photos?: Array<{url: string}>;
   description?: string;
@@ -39,12 +41,14 @@ interface PaginationData {
   pages: number;
 }
 
+interface GymResponseData {
+  gyms?: Gym[];
+  pagination?: PaginationData;
+}
+
 interface AdminResponse {
   success: boolean;
-  data: {
-    gyms: Gym[];
-    pagination: PaginationData;
-  };
+  data: GymResponseData | Gym[] | Gym | null;
   message?: string;
 }
 
@@ -64,6 +68,8 @@ const GymManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [statusChangeReason, setStatusChangeReason] = useState('');
   const [statusAction, setStatusAction] = useState<'active' | 'banned' | 'pending' | null>(null);
+  const [showFeaturedModal, setShowFeaturedModal] = useState(false);
+  const [featureAction, setFeatureAction] = useState<boolean | null>(null);
   const [cities, setCities] = useState<string[]>([]);
 
   useEffect(() => {
@@ -86,20 +92,41 @@ const GymManagement = () => {
       const response = await adminService.getAllGyms(options) as AdminResponse;
       
       if (response && response.success && response.data) {
-        setGyms(response.data.gyms);
-        setPagination(response.data.pagination);
+        // Handle different possible response structures
+        let gymsData: Gym[] = [];
+        let paginationData: PaginationData | undefined;
         
-        // Extract unique cities for the filter if they're not already set
-        if (cities.length === 0 && response.data.gyms.length > 0) {
-          const uniqueCities = [...new Set(response.data.gyms
-            .map(gym => gym.address.city)
+        if (Array.isArray(response.data)) {
+          // If data is directly an array of gyms
+          gymsData = response.data;
+        } else if ('gyms' in response.data && response.data.gyms) {
+          // If data has gyms and pagination properties
+          gymsData = response.data.gyms;
+          paginationData = response.data.pagination;
+        } else if ('_id' in response.data) {
+          // If data is a single gym object
+          gymsData = [response.data];
+        }
+        
+        setGyms(gymsData);
+        
+        // Update pagination if available
+        if (paginationData) {
+          setPagination(paginationData);
+        }
+        
+        // Extract unique cities only if we have gyms data
+        if (gymsData.length > 0 && cities.length === 0) {
+          const uniqueCities = [...new Set(gymsData
+            .map(gym => gym.address?.city)
             .filter(city => city !== undefined && city !== null)
           )] as string[];
           
           setCities(uniqueCities);
         }
       } else {
-        throw new Error('Failed to fetch gyms');
+        // Just log the error but don't throw to prevent component from crashing
+        console.error('Failed to fetch gyms:', response?.message || 'Unknown error');
       }
     } catch (error) {
       console.error('Error fetching gyms:', error);
@@ -121,7 +148,7 @@ const GymManagement = () => {
       setLoading(true);
       
       // Use admin service to update gym status
-      const response = await adminService.updateGymStatus(gymId, newStatus, reason) as { success: boolean; message?: string };
+      const response = await adminService.updateGymStatus(gymId, newStatus, reason);
       
       if (response && response.success) {
         // Update the gym in the list
@@ -147,10 +174,59 @@ const GymManagement = () => {
     }
   };
 
+  const handleToggleFeatured = async (gymId: string, isFeatured: boolean) => {
+    try {
+      setLoading(true);
+      
+      // Use admin service to toggle featured status
+      const response = await adminService.toggleFeaturedStatus(gymId, isFeatured);
+      
+      if (response && response.success) {
+        // Update the gym in the list
+        setGyms(prevGyms => 
+          prevGyms.map(gym => 
+            gym._id === gymId ? { ...gym, isFeatured } : gym
+          )
+        );
+        
+        showSuccess(`Gym ${isFeatured ? 'marked as featured' : 'removed from featured'} successfully`);
+      } else {
+        // Show error message from response or default message
+        const errorMessage = response?.message || 'Failed to update featured status';
+        showError(errorMessage);
+        console.error('Error response:', response);
+        
+        // If unauthorized message, you might want to redirect to login
+        if (errorMessage.includes('session has expired') || 
+            errorMessage.includes('not authorized') ||
+            errorMessage.includes('Authentication token is missing')) {
+          // Optionally navigate to login page after a delay
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating featured status:', error);
+      showError('Failed to update featured status: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
+      setShowFeaturedModal(false);
+      setSelectedGym(null);
+      setFeatureAction(null);
+    }
+  };
+
   const openStatusModal = (gym: Gym, action: 'active' | 'banned' | 'pending') => {
     setSelectedGym(gym);
     setStatusAction(action);
     setShowModal(true);
+  };
+
+  const openFeaturedModal = (gym: Gym, featured: boolean) => {
+    setSelectedGym(gym);
+    setFeatureAction(featured);
+    setShowFeaturedModal(true);
   };
 
   const getStatusColor = (status: Gym['status']) => {
@@ -272,6 +348,9 @@ const GymManagement = () => {
                     Status
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Featured
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Registered
                   </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -286,10 +365,10 @@ const GymManagement = () => {
                       <div className="flex items-center">
                         <div className="h-10 w-10 flex-shrink-0">
                           {gym.photos && gym.photos.length > 0 ? (
-                            <img 
-                              className="h-10 w-10 rounded-full object-cover" 
-                              src={gym.photos[0].url} 
-                              alt={gym.gymName} 
+                            <img
+                              className="h-10 w-10 rounded-full object-cover"
+                              src={gym.photos[0].url}
+                              alt={gym.gymName}
                             />
                           ) : (
                             <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
@@ -317,6 +396,16 @@ const GymManagement = () => {
                         {getStatusText(gym.status)}
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {gym.isFeatured ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          <Star className="w-3 h-3 mr-1" />
+                          Featured
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Not featured</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(gym.createdAt).toLocaleDateString()}
                     </td>
@@ -329,7 +418,8 @@ const GymManagement = () => {
                           <button className="text-gray-400 hover:text-gray-600">
                             <MoreVertical className="w-5 h-5" />
                           </button>
-                          <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none hidden group-hover:block">
+                          <div className="absolute right-0 z-40 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none hidden group-hover:block">
+                            {/* Status change options */}
                             {gym.status !== 'active' && (
                               <button
                                 onClick={() => openStatusModal(gym, 'active')}
@@ -355,6 +445,27 @@ const GymManagement = () => {
                               >
                                 <Ban className="mr-3 h-4 w-4 text-red-500" />
                                 Ban Gym
+                              </button>
+                            )}
+                            
+                            {/* Featured gym toggle options */}
+                            <div className="border-t border-gray-100 my-1"></div>
+                            {!gym.isFeatured && gym.status === 'active' && (
+                              <button
+                                onClick={() => openFeaturedModal(gym, true)}
+                                className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                <Star className="mr-3 h-4 w-4 text-amber-500" />
+                                Mark as Featured
+                              </button>
+                            )}
+                            {gym.isFeatured && (
+                              <button
+                                onClick={() => openFeaturedModal(gym, false)}
+                                className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                <XCircle className="mr-3 h-4 w-4 text-gray-500" />
+                                Remove from Featured
                               </button>
                             )}
                           </div>
@@ -522,6 +633,70 @@ const GymManagement = () => {
                     setSelectedGym(null);
                     setStatusAction(null);
                     setStatusChangeReason('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Featured Status Modal */}
+      {showFeaturedModal && selectedGym && featureAction !== null && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            {/* Background overlay */}
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            {/* Modal panel */}
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className={`mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${
+                    featureAction ? 'bg-amber-100' : 'bg-gray-100'
+                  } sm:mx-0 sm:h-10 sm:w-10`}>
+                    {featureAction ? (
+                      <Star className="h-6 w-6 text-amber-600" />
+                    ) : (
+                      <XCircle className="h-6 w-6 text-gray-600" />
+                    )}
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                      {featureAction ? 'Feature Gym' : 'Remove from Featured'}
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500">
+                        {featureAction
+                          ? `Are you sure you want to feature "${selectedGym.gymName}"? Featured gyms will be displayed prominently on the landing page.`
+                          : `Are you sure you want to remove "${selectedGym.gymName}" from featured? It will no longer appear in the featured section.`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${
+                    featureAction
+                      ? 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500'
+                      : 'bg-gray-600 hover:bg-gray-700 focus:ring-gray-500'
+                  }`}
+                  onClick={() => handleToggleFeatured(selectedGym._id, featureAction)}
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={() => {
+                    setShowFeaturedModal(false);
+                    setSelectedGym(null);
+                    setFeatureAction(null);
                   }}
                 >
                   Cancel

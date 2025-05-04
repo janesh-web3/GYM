@@ -1,4 +1,5 @@
 import Gym from '../models/Gym.js';
+import GymMembership from '../models/GymMembership.js';
 import { uploadMedia, deleteMedia } from '../utils/cloudinary.js';
 import fs from 'fs';
 
@@ -463,6 +464,202 @@ export const uploadGymMedia = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Error uploading media' 
+    });
+  }
+};
+
+// @desc    Get all active gyms
+// @route   GET /api/gyms/active
+// @access  Public
+export const getActiveGyms = async (req, res) => {
+  try {
+    const { city, search, limit = 20, page = 1 } = req.query;
+    const filter = { status: 'active' };
+
+    // Add additional filters
+    if (city) filter['address.city'] = city;
+    if (search) filter.$text = { $search: search };
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const gyms = await Gym.find(filter)
+      .select('gymName address description logo photos videos services')
+      .sort('-createdAt')
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const total = await Gym.countDocuments(filter);
+
+    res.json({
+      gyms,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Join a gym as a member
+// @route   POST /api/gyms/:id/join
+// @access  Private (Member role)
+export const joinGym = async (req, res) => {
+  try {
+    const gymId = req.params.id;
+    const userId = req.user._id;
+
+    // Check if gym exists and is active
+    const gym = await Gym.findOne({ _id: gymId, status: 'active' });
+    if (!gym) {
+      return res.status(404).json({ message: 'Gym not found or not active' });
+    }
+
+    // Check if user is already a member of this gym
+    const existingMembership = await GymMembership.findOne({ userId, gymId });
+    if (existingMembership) {
+      return res.status(400).json({ 
+        message: 'You are already a member of this gym',
+        membership: existingMembership
+      });
+    }
+
+    // Create new membership
+    const gymMembership = await GymMembership.create({
+      userId,
+      gymId,
+      status: 'active'
+    });
+
+    await gymMembership.populate('gymId', 'gymName address');
+
+    res.status(201).json({
+      message: 'Successfully joined the gym',
+      membership: gymMembership
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Check user's membership status for a gym
+// @route   GET /api/gyms/:id/membership-status
+// @access  Private
+export const checkMembershipStatus = async (req, res) => {
+  try {
+    const gymId = req.params.id;
+    const userId = req.user._id;
+
+    const membership = await GymMembership.findOne({ userId, gymId });
+    
+    if (!membership) {
+      return res.json({ isMember: false });
+    }
+
+    res.json({
+      isMember: true,
+      status: membership.status,
+      joinedDate: membership.joinedDate
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get gyms the user is a member of
+// @route   GET /api/gyms/memberships
+// @access  Private
+export const getUserGymMemberships = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const memberships = await GymMembership.find({ userId, status: 'active' })
+      .populate('gymId', 'gymName address description logo photos videos');
+
+    res.json(memberships);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Toggle featured status of a gym
+// @route   PATCH /api/gyms/:id/featured
+// @access  Private (SuperAdmin only)
+export const toggleFeaturedStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isFeatured } = req.body;
+    
+    // Validate that isFeatured is a boolean
+    if (typeof isFeatured !== 'boolean') {
+      return res.status(400).json({ 
+        success: false,
+        message: 'isFeatured must be a boolean value' 
+      });
+    }
+
+    const gym = await Gym.findById(id);
+    
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Gym not found' 
+      });
+    }
+
+    // Update the featured status
+    gym.isFeatured = isFeatured;
+    await gym.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Gym has been ${isFeatured ? 'marked as featured' : 'removed from featured'}`,
+      gym: {
+        _id: gym._id,
+        gymName: gym.gymName,
+        isFeatured: gym.isFeatured
+      }
+    });
+  } catch (error) {
+    console.error('Error toggling featured status:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || 'Error updating featured status' 
+    });
+  }
+};
+
+// @desc    Get all featured gyms
+// @route   GET /api/gyms/featured
+// @access  Public
+export const getFeaturedGyms = async (req, res) => {
+  try {
+    const { limit = 6 } = req.query;
+    
+    // Find active and featured gyms
+    const featuredGyms = await Gym.find({ 
+      isFeatured: true,
+      status: 'active'  // Only return active gyms
+    })
+    .select('gymName address description logo photos videos services')
+    .sort('-updatedAt')
+    .limit(parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      count: featuredGyms.length,
+      data: featuredGyms
+    });
+  } catch (error) {
+    console.error('Error fetching featured gyms:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || 'Error fetching featured gyms' 
     });
   }
 }; 
