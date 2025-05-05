@@ -163,6 +163,14 @@ const UploadMedia = () => {
     return entityType === 'gym' ? gymId : branchId;
   };
 
+  const getValidatedEntityId = (): string => {
+    const id = getEntityId();
+    if (!id) {
+      throw new Error(`Please select a ${entityType} first`);
+    }
+    return id;
+  };
+
   const handlePhotoUploadClick = () => {
     photoInputRef.current?.click();
   };
@@ -240,39 +248,50 @@ const UploadMedia = () => {
   };
 
   const handleBulkUpload = async () => {
-    const entityId = getEntityId();
-    if (!entityId || selectedFiles.length === 0) return;
-    
-    setUploading(true);
-    const toastId = showLoading(`Uploading ${selectedFiles.length} file(s)...`);
-    
+    if (selectedFiles.length === 0) {
+      showError('No files selected');
+      return;
+    }
+
     try {
-      // Separate images and videos
-      const imageFiles = selectedFiles
-        .filter(item => item.type === 'photo' && !item.error)
-        .map(item => item.file);
+      setUploading(true);
+      const toastId = showLoading('Uploading media...');
       
+      // Get validated entity ID
+      let entityId;
+      try {
+        entityId = getValidatedEntityId();
+      } catch (error) {
+        updateToast(toastId, (error as Error).message, 'error');
+        setUploading(false);
+        return;
+      }
+      
+      // Group files by type
+      const photoFiles = selectedFiles
+        .filter(f => f.type === 'photo' && !f.error)
+        .map(f => f.file);
+        
       const videoFiles = selectedFiles
-        .filter(item => item.type === 'video' && !item.error)
-        .map(item => item.file);
+        .filter(f => f.type === 'video' && !f.error)
+        .map(f => f.file);
       
-      const newPhotos: MediaItem[] = [];
-      const newVideos: MediaItem[] = [];
+      let uploadedPhotos: MediaItem[] = [];
+      let uploadedVideos: MediaItem[] = [];
       
-      // Upload images if any
-      if (imageFiles.length > 0) {
+      // Upload photos if any
+      if (photoFiles.length > 0) {
         try {
           const photoResults = await mediaService.uploadMultipleMediaFiles(
-            imageFiles, 
+            photoFiles, 
             'photo', 
             entityId, 
             entityType
           );
-          newPhotos.push(...photoResults);
+          uploadedPhotos = photoResults;
         } catch (error) {
           console.error('Error uploading photos:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error uploading photos';
-          showError(errorMessage);
+          showError(`Error uploading photos: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
       
@@ -285,32 +304,63 @@ const UploadMedia = () => {
             entityId, 
             entityType
           );
-          newVideos.push(...videoResults);
+          uploadedVideos = videoResults;
         } catch (error) {
           console.error('Error uploading videos:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error uploading videos';
-          showError(errorMessage);
+          showError(`Error uploading videos: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
       
-      // Update state
-      setPhotos(prev => [...prev, ...newPhotos]);
-      setVideos(prev => [...prev, ...newVideos]);
+      // Update states with new media
+      if (uploadedPhotos.length > 0) {
+        setPhotos(prev => [...prev, ...uploadedPhotos]);
+      }
       
-      // Clean up previews
-      selectedFiles.forEach(file => URL.revokeObjectURL(file.preview));
+      if (uploadedVideos.length > 0) {
+        setVideos(prev => [...prev, ...uploadedVideos]);
+      }
+      
+      // Show success toast
+      const totalUploaded = uploadedPhotos.length + uploadedVideos.length;
+      const successMessage = totalUploaded > 0 
+        ? `Successfully uploaded ${totalUploaded} media files!` 
+        : 'No files were uploaded successfully.';
+        
+      updateToast(toastId, successMessage, totalUploaded > 0 ? 'success' : 'error');
+      
+      // Reset the UI
       setSelectedFiles([]);
       setShowUploadPreview(false);
       
-      const totalUploaded = newPhotos.length + newVideos.length;
+      // Refresh data from server to ensure we have the latest
       if (totalUploaded > 0) {
-        updateToast(toastId, `Successfully uploaded ${totalUploaded} file(s)!`, 'success');
-      } else {
-        updateToast(toastId, 'No files were uploaded. Please try again.', 'error');
+        if (entityType === 'gym' && gymId) {
+          const updatedGym = await gymService.getGymById(gymId);
+          setGymData(updatedGym as any);
+          setPhotos(updatedGym.photos?.map(photo => ({
+            ...photo,
+            type: 'photo'
+          })) || []);
+          setVideos(updatedGym.videos?.map(video => ({
+            ...video,
+            type: 'video'
+          })) || []);
+        } else if (entityType === 'branch' && branchId) {
+          const updatedBranch = await branchService.getBranchById(branchId);
+          setBranchData(updatedBranch as any);
+          setPhotos(updatedBranch.photos?.map(photo => ({
+            ...photo,
+            type: 'photo'
+          })) || []);
+          setVideos(updatedBranch.videos?.map(video => ({
+            ...video,
+            type: 'video'
+          })) || []);
+        }
       }
     } catch (error) {
-      console.error(`Error during bulk upload:`, error);
-      updateToast(toastId, `An error occurred during upload: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      console.error('Error during bulk upload:', error);
+      showError(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
     }
@@ -412,7 +462,7 @@ const UploadMedia = () => {
     }
   };
 
-  // Maintain the original function for compatibility
+  // Enhanced function to handle file upload errors and retries
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>, type: 'photo' | 'video') => {
     const files = e.target.files;
     const entityId = getEntityId();
@@ -420,6 +470,12 @@ const UploadMedia = () => {
 
     setUploading(true);
     const toastId = showLoading(`Uploading ${files.length} ${type}(s)...`);
+
+    // Enhanced error handling for branch uploads
+    if (entityType === 'branch' && !branchId) {
+      showError('Please select a branch first');
+      return;
+    }
 
     try {
       const uploadedItems: MediaItem[] = [];
@@ -472,8 +528,17 @@ const UploadMedia = () => {
         updateToast(toastId, `No ${type}s were uploaded. Please try again.`, 'error');
       }
     } catch (error) {
-      console.error(`Error during ${type} upload:`, error);
-      updateToast(toastId, `An error occurred during upload: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Error uploading ${type}:`, error);
+      
+      // Show more helpful error for branch uploads
+      if (entityType === 'branch' && errorMessage.includes('404')) {
+        showError(`Failed to upload ${type} to branch. Branch upload endpoint may be misconfigured.`);
+      } else if (entityType === 'branch' && errorMessage.includes('unauthorized')) {
+        showError(`You are not authorized to upload media to this branch.`);
+      } else {
+        showError(`Failed to upload ${type}: ${errorMessage}`);
+      }
     } finally {
       setUploading(false);
     }
@@ -495,11 +560,11 @@ const UploadMedia = () => {
       <div className="mb-6">
         <div className="bg-white shadow-md rounded-md p-4">
           <h2 className="text-lg font-semibold mb-3">Select Media Source</h2>
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <button
-              className={`flex items-center gap-2 px-4 py-2 rounded-md ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
                 entityType === 'gym' 
-                  ? 'bg-primary-600 text-white' 
+                  ? 'bg-primary-600 text-white ring-2 ring-primary-300 shadow-md' 
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
               }`}
               onClick={() => handleEntityTypeChange('gym')}
@@ -508,9 +573,9 @@ const UploadMedia = () => {
               Main Gym
             </button>
             <button
-              className={`flex items-center gap-2 px-4 py-2 rounded-md ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
                 entityType === 'branch' 
-                  ? 'bg-primary-600 text-white' 
+                  ? 'bg-primary-600 text-white ring-2 ring-primary-300 shadow-md' 
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
               }`}
               onClick={() => handleEntityTypeChange('branch')}
@@ -525,22 +590,44 @@ const UploadMedia = () => {
               <label htmlFor="branch-select" className="block text-sm font-medium text-gray-700 mb-1">
                 Select Branch
               </label>
-              <select
-                id="branch-select"
-                value={branchId || ''}
-                onChange={handleBranchChange}
-                className="w-full max-w-xs p-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              >
-                {branches.length === 0 ? (
-                  <option value="">No branches available</option>
-                ) : (
-                  branches.map(branch => (
-                    <option key={branch._id} value={branch._id}>
-                      {branch.branchName}
-                    </option>
-                  ))
-                )}
-              </select>
+              <div className="relative">
+                <select
+                  id="branch-select"
+                  value={branchId || ''}
+                  onChange={handleBranchChange}
+                  className={`w-full max-w-xs p-2 pr-8 border rounded-md focus:ring-primary-500 focus:border-primary-500 appearance-none ${
+                    branchId ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'
+                  }`}
+                >
+                  <option value="" disabled>-- Select a Branch --</option>
+                  {branches.length === 0 ? (
+                    <option value="" disabled>No branches available</option>
+                  ) : (
+                    branches.map(branch => (
+                      <option key={branch._id} value={branch._id}>
+                        {branch.branchName}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              {branches.length === 0 && (
+                <p className="text-sm text-yellow-600 mt-1 flex items-center">
+                  <AlertCircle size={14} className="mr-1" />
+                  You need to create branches before you can upload media to them
+                </p>
+              )}
+              {!branchId && branches.length > 0 && (
+                <p className="text-sm text-yellow-600 mt-1 flex items-center">
+                  <AlertCircle size={14} className="mr-1" />
+                  Please select a branch to upload media
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -593,6 +680,7 @@ const UploadMedia = () => {
                 allowedTypes={['photo', 'video']}
                 maxFiles={20}
                 className="mb-4"
+                entityType={entityType}
               />
               
               {/* Legacy buttons for backward compatibility */}

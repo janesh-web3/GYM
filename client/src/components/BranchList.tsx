@@ -121,7 +121,7 @@ const BranchList: React.FC<BranchListProps> = ({ branches, gymId, refreshGymData
               <div className="flex justify-between items-center">
                 <button
                   className="text-primary-600 hover:text-primary-800 text-sm font-medium"
-                  onClick={() => navigate(`/branches/${branch._id}`)}
+                  onClick={() => navigate(`/gyms/branches/${branch._id}`)}
                 >
                   View Details
                 </button>

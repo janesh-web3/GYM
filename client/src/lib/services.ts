@@ -115,7 +115,39 @@ export const gymService = {
   
   getGymStats: async (gymId) => {
     return apiMethods.get(`/gyms/${gymId}/stats`);
-  }
+  },
+  
+  getGymBranches: async (gymId) => {
+    return apiMethods.get(`/gyms/${gymId}/branches`);
+  },
+  
+  getGymMembers: async (gymId, options = {}) => {
+    const { 
+      status, 
+      branchId, 
+      search, 
+      page = 1, 
+      limit = 20 
+    } = options;
+    
+    let queryString = `/gyms/${gymId}/members?page=${page}&limit=${limit}`;
+    
+    if (status) queryString += `&status=${status}`;
+    if (branchId) queryString += `&branchId=${branchId}`;
+    if (search) queryString += `&search=${encodeURIComponent(search)}`;
+    
+    return apiMethods.get(queryString);
+  },
+
+  activateMember: async (memberId) => {
+    return apiMethods.patch(`/gyms/members/${memberId}/activate`);
+  },
+  
+  updateMemberStatus: async (memberId, status) => {
+    return apiMethods.patch(`/gyms/members/${memberId}/status`, { status });
+  },
+  
+  // ... other methods
 };
 
 // Branch service
@@ -170,6 +202,18 @@ export const branchService = {
   
   deletePhoto: async (branchId, photoId) => {
     return apiMethods.delete(`/branches/${branchId}/photos/${photoId}`);
+  },
+  
+  getBranchMembers: async (branchId) => {
+    return apiMethods.get(`/branches/${branchId}/members`);
+  },
+  
+  activateMember: async (memberId) => {
+    return apiMethods.patch(`/branches/members/${memberId}/activate`);
+  },
+  
+  updateMemberStatus: async (memberId, status) => {
+    return apiMethods.patch(`/branches/members/${memberId}/status`, { status });
   }
 };
 

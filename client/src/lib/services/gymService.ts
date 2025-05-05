@@ -73,12 +73,42 @@ export const toggleFeaturedStatus = async (gymId: string, isFeatured: boolean) =
   }
 };
 
+/**
+ * Get all branches for a specific gym
+ * @param gymId The ID of the gym to fetch branches for
+ */
+export const getGymBranches = async (gymId: string) => {
+  try {
+    const data = await apiMethods.get(`/api/gyms/${gymId}/branches`, {});
+    return data;
+  } catch (error) {
+    console.error(`Error fetching branches for gym ${gymId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get all members for a specific gym
+ * @param gymId The ID of the gym to fetch members for
+ */
+export const getGymMembers = async (gymId: string) => {
+  try {
+    const data = await apiMethods.get(`/api/gyms/${gymId}/members`, {});
+    return data;
+  } catch (error) {
+    console.error(`Error fetching members for gym ${gymId}:`, error);
+    throw error;
+  }
+};
+
 const gymService = {
   getAllGyms,
   getGymById,
   getGymStats,
   getFeaturedGyms,
-  toggleFeaturedStatus
+  toggleFeaturedStatus,
+  getGymBranches,
+  getGymMembers
 };
 
 export default gymService; 

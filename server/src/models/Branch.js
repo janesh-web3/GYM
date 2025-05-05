@@ -44,16 +44,18 @@ const branchSchema = new mongoose.Schema(
       lowercase: true,
       match: [/^\S+@\S+\.\S+$/, "Please enter a valid email"],
     },
-    workingHours: {
-      openTime: {
-        type: String,
-        default: "09:00",
+    openingHours: [
+      {
+        openTime: {
+          type: String,
+          default: "09:00",
+        },
+        closeTime: {
+          type: String,
+          default: "22:00",
+        },
       },
-      closeTime: {
-        type: String,
-        default: "22:00",
-      },
-    },
+    ],
     facilities: [
       {
         type: String,
@@ -62,7 +64,6 @@ const branchSchema = new mongoose.Schema(
     ],
     description: {
       type: String,
-      required: [true, "Description is required"],
     },
     photos: [
       {

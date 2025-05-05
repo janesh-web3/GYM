@@ -99,9 +99,9 @@ const Branches = () => {
   const fetchBranches = async () => {
     try {
       setLoading(true);
-      const response = await branchService.getAllBranches() as {data : Branch[]};
+      const response = await branchService.getAllBranches() ;
       if (response) {
-        setBranches(response.data);
+        setBranches(response);
       }
       setLoading(false);
     } catch (error) {

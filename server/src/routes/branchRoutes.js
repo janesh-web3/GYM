@@ -3,7 +3,7 @@ import { protect, authorize } from '../middlewares/authMiddleware.js';
 import { branchUpload } from '../middlewares/uploadMiddleware.js';
 import {
   createBranch,
-  getGymBranches as getBranches,
+  getGymBranches,
   getBranch,
   updateBranch,
   deleteBranch,
@@ -11,7 +11,9 @@ import {
   deleteBranchMedia,
   joinBranch,
   getBranchMembers,
-  getBranchStats
+  getBranchStats,
+  activateMember,
+  updateMemberStatus
 } from '../controllers/branchController.js';
 
 const router = express.Router();
@@ -19,32 +21,44 @@ const router = express.Router();
 // Protected routes (need to be logged in)
 router.use(protect);
 
-// Restrict to gym owner
-router.use(authorize('gymOwner'));
-
 // Branch CRUD operations
 router.route('/')
-  .post(createBranch)
-  .get(getBranches);
+  .post(authorize('gymOwner'), createBranch)
+  .get(authorize('gymOwner'), getGymBranches);
 
 router.route('/:id')
-  .get(getBranch)
-  .put(updateBranch)
-  .delete(deleteBranch);
+  .get(getBranch) // Public - anyone can view branch details
+  .put(authorize('gymOwner'), updateBranch)
+  .delete(authorize('gymOwner'), deleteBranch);
 
 // Media routes with enhanced upload middleware
 router.post(
   '/:id/media',
+  authorize('gymOwner'),
+  (req, res, next) => {
+    // Set the mediaType based on the query parameter
+    const mediaType = req.query.type || 'photo';
+    // Apply the appropriate middleware based on the media type
+    branchUpload.array('files', mediaType, 10)(req, res, (err) => {
+      if (err) {
+        return branchUpload.errorHandler(err, req, res, next);
+      }
+      next();
+    });
+  },
   uploadBranchMedia
 );
 
-router.delete('/:id/media/:mediaId', deleteBranchMedia);
+router.delete('/:id/media/:mediaId', authorize('gymOwner'), deleteBranchMedia);
 
 // Member routes
 router.post('/:id/join', authorize('member'), joinBranch);
+router.post('/:id/subscribe', authorize('member'), joinBranch);
 
-// Admin routes
+// Member management
 router.get('/:id/members', authorize('gymOwner', 'trainer'), getBranchMembers);
+router.patch('/members/:memberId/activate', authorize('gymOwner'), activateMember);
+router.patch('/members/:memberId/status', authorize('gymOwner'), updateMemberStatus);
 router.get('/:id/stats', authorize('gymOwner'), getBranchStats);
 
 export default router; 

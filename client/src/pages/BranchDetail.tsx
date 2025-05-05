@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Branch } from '../types/Role';
-import { getBranchDetails, joinBranch } from '../services/branchService';
-import { FaMapMarkerAlt, FaPhone, FaEnvelope, FaClock, FaCheckCircle, FaSpinner, FaUsers } from 'react-icons/fa';
+import { getBranchDetails, subscribeToBranch } from '../services/branchService';
+import { getGymSubscriptionPlans } from '../services/gymService';
+import { 
+  FaMapMarkerAlt, FaPhone, FaEnvelope, FaClock, FaCheckCircle, 
+  FaSpinner, FaUsers, FaArrowLeft, FaInfoCircle, FaCreditCard 
+} from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 import SubscriptionSelector from '../components/SubscriptionSelector';
@@ -19,6 +23,8 @@ const BranchDetail: React.FC = () => {
   const [joiningBranch, setJoiningBranch] = useState(false);
   const [isMember, setIsMember] = useState(false);
   const [showSubscriptions, setShowSubscriptions] = useState(false);
+  const [plans, setPlans] = useState([]);
+  const [planLoading, setPlanLoading] = useState(false);
   const [activeMediaType, setActiveMediaType] = useState<'photos' | 'videos'>('photos');
   const [selectedMedia, setSelectedMedia] = useState<number>(0);
 
@@ -37,13 +43,18 @@ const BranchDetail: React.FC = () => {
           setGym(branchData.gymId);
         } else {
           // If it's just an ID, we'll need to fetch gym details separately
-          // This depends on your API response structure
+          // In this case, we know it's just an ID
           setGym({ _id: branchData.gymId, gymName: 'Gym' });
         }
         
         // Check membership status - in a real implementation, would call an API
         // For demo purposes, assuming not a member
         setIsMember(false);
+        
+        if (gym && gym._id) {
+          // Fetch subscription plans for this gym/branch
+          fetchSubscriptionPlans(branchData.gymId, id);
+        }
         
         setLoading(false);
       } catch (err) {
@@ -56,15 +67,27 @@ const BranchDetail: React.FC = () => {
     fetchBranchDetails();
   }, [id]);
 
-  const handleJoinClick = () => {
+  const fetchSubscriptionPlans = async (gymId: string, branchId: string) => {
+    try {
+      setPlanLoading(true);
+      const subscriptionPlans = await getGymSubscriptionPlans(gymId, branchId);
+      setPlans(subscriptionPlans);
+      setPlanLoading(false);
+    } catch (err) {
+      console.error('Error fetching subscription plans:', err);
+      setPlanLoading(false);
+    }
+  };
+
+  const handleSubscribeClick = () => {
     if (!isAuthenticated) {
-      toast.error('Please log in to join this branch');
+      toast.error('Please log in to subscribe to this branch');
       navigate('/login');
       return;
     }
 
     if (user?.role !== 'member') {
-      toast.error('Only members can join branches');
+      toast.error('Only members can subscribe to branches');
       return;
     }
 
@@ -171,7 +194,7 @@ const BranchDetail: React.FC = () => {
         </div>
         
         <div className="mb-4">
-          {activeMediaType === 'photos' && (
+          {activeMediaType === 'photos' && media.length > 0 && (
             <div className="bg-black aspect-w-16 aspect-h-9 rounded-lg overflow-hidden">
               <img 
                 src={media[selectedMedia]?.url} 
@@ -181,7 +204,7 @@ const BranchDetail: React.FC = () => {
             </div>
           )}
           
-          {activeMediaType === 'videos' && (
+          {activeMediaType === 'videos' && media.length > 0 && (
             <div className="bg-black aspect-w-16 aspect-h-9 rounded-lg overflow-hidden">
               <video 
                 src={media[selectedMedia]?.url} 
@@ -258,6 +281,46 @@ const BranchDetail: React.FC = () => {
   return (
     <div className="bg-gray-100 min-h-screen">
       <div className="container mx-auto px-4 py-8">
+        {/* Breadcrumbs navigation */}
+        <div className="mb-4">
+          <nav className="flex mb-5" aria-label="Breadcrumb">
+            <ol className="inline-flex items-center space-x-1 md:space-x-3">
+              <li className="inline-flex items-center">
+                <Link to="/" className="text-gray-700 hover:text-primary-600 inline-flex items-center">
+                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path></svg>
+                  Home
+                </Link>
+              </li>
+              <li>
+                <div className="flex items-center">
+                  <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path></svg>
+                  <Link to="/gyms" className="ml-1 text-gray-700 hover:text-primary-600 md:ml-2">
+                    Gyms
+                  </Link>
+                </div>
+              </li>
+              {gym && (
+                <li>
+                  <div className="flex items-center">
+                    <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path></svg>
+                    <Link to={`/gyms/${gym._id}`} className="ml-1 text-gray-700 hover:text-primary-600 md:ml-2">
+                      {gym.gymName}
+                    </Link>
+                  </div>
+                </li>
+              )}
+              <li aria-current="page">
+                <div className="flex items-center">
+                  <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path></svg>
+                  <span className="ml-1 text-gray-500 md:ml-2 font-medium">
+                    {branch.branchName}
+                  </span>
+                </div>
+              </li>
+            </ol>
+          </nav>
+        </div>
+
         <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
           {/* Hero image */}
           <div className="h-48 md:h-64 lg:h-72 bg-gray-300 relative">
@@ -272,19 +335,37 @@ const BranchDetail: React.FC = () => {
                 <h1 className="text-2xl font-bold text-primary-800">{branch.branchName}</h1>
               </div>
             )}
+
+            {/* Status badge */}
+            <div className="absolute top-4 right-4">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                branch.status === 'active' 
+                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                  : branch.status === 'maintenance'
+                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
+              }`}>
+                {branch.status === 'active' 
+                  ? 'Active' 
+                  : branch.status === 'maintenance' 
+                    ? 'Under Maintenance' 
+                    : 'Inactive'}
+              </span>
+            </div>
           </div>
           
           {/* Content */}
           <div className="p-6">
-            <div className="mb-4">
+            <div className="mb-6">
               {gym && (
                 <div className="mb-2">
-                  <a 
-                    href={`/gyms/${gym._id}`}
-                    className="text-primary-600 hover:text-primary-800 text-sm font-medium"
+                  <Link 
+                    to={`/gyms/${gym._id}`}
+                    className="text-primary-600 hover:text-primary-800 text-sm font-medium flex items-center"
                   >
-                    {gym.gymName}
-                  </a>
+                    <FaArrowLeft size={12} className="mr-1" />
+                    Back to {gym.gymName}
+                  </Link>
                 </div>
               )}
               
@@ -292,23 +373,9 @@ const BranchDetail: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900">{branch.branchName}</h1>
                 
                 <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-gray-100 rounded-full text-sm text-gray-700 flex items-center">
+                  <span className="px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700 flex items-center">
                     <FaUsers size={14} className="mr-1" />
                     {branch.memberCount} members
-                  </span>
-                  
-                  <span className={`px-2 py-1 rounded-full text-sm flex items-center ${
-                    branch.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : branch.status === 'maintenance'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                  }`}>
-                    {branch.status === 'active' 
-                      ? 'Active' 
-                      : branch.status === 'maintenance' 
-                        ? 'Maintenance' 
-                        : 'Inactive'}
                   </span>
                 </div>
               </div>
@@ -317,17 +384,17 @@ const BranchDetail: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left column - Information */}
               <div className="lg:col-span-1">
-                <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6 shadow-sm">
                   <h2 className="text-lg font-semibold text-gray-800 mb-4">Branch Details</h2>
                   
                   {renderAddress()}
                   {renderContact()}
                   
                   {user && user.role === 'member' && (
-                    <div className="mt-4">
+                    <div className="mt-5">
                       {isMember ? (
-                        <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-center">
-                          <FaCheckCircle size={16} className="text-green-500 mr-2" />
+                        <div className="bg-green-50 border border-green-200 rounded-md p-4 flex items-center">
+                          <FaCheckCircle size={16} className="text-green-500 mr-2 flex-shrink-0" />
                           <div>
                             <p className="text-green-800 font-medium">
                               You are a member of this branch
@@ -336,42 +403,70 @@ const BranchDetail: React.FC = () => {
                         </div>
                       ) : (
                         <button
-                          onClick={handleJoinClick}
+                          onClick={handleSubscribeClick}
                           disabled={joiningBranch || branch.status !== 'active'}
-                          className={`w-full py-2 px-4 rounded-md text-white font-medium ${
+                          className={`w-full py-3 px-4 rounded-md text-white font-medium flex items-center justify-center ${
                             joiningBranch || branch.status !== 'active'
                               ? 'bg-gray-400 cursor-not-allowed'
-                              : 'bg-primary-600 hover:bg-primary-700'
+                              : 'bg-primary-600 hover:bg-primary-700 shadow-sm transition-colors'
                           }`}
                         >
                           {joiningBranch ? (
                             <span className="flex items-center justify-center">
                               <FaSpinner size={16} className="animate-spin mr-2" />
-                              Joining...
+                              Processing...
                             </span>
                           ) : branch.status !== 'active' ? (
-                            'Currently Unavailable'
+                            <span className="flex items-center justify-center">
+                              <FaInfoCircle size={16} className="mr-2" />
+                              Currently Unavailable
+                            </span>
                           ) : (
-                            'Join Branch'
+                            <span className="flex items-center justify-center">
+                              <FaCreditCard size={16} className="mr-2" />
+                              Subscribe to Branch
+                            </span>
                           )}
                         </button>
+                      )}
+                      
+                      {!isMember && branch.status === 'active' && (
+                        <p className="text-sm text-gray-600 mt-2 text-center">
+                          Choose a subscription plan to join this branch
+                        </p>
                       )}
                     </div>
                   )}
                 </div>
                 
-                <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6 shadow-sm">
                   <h2 className="text-lg font-semibold text-gray-800 mb-4">About</h2>
                   <p className="text-gray-600">{branch.description}</p>
                 </div>
+                
+                {branch.facilities && branch.facilities.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6 shadow-sm">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Facilities</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                      {branch.facilities.map((facility, index) => (
+                        <div key={index} className="flex items-center">
+                          <FaCheckCircle size={12} className="text-green-500 mr-2" />
+                          <span className="text-gray-700">{facility}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Right column - Media gallery */}
               <div className="lg:col-span-2">
-                <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6 shadow-sm">
                   <h2 className="text-lg font-semibold text-gray-800 mb-4">Gallery</h2>
                   {renderMediaGallery()}
                 </div>
+                
+                {/* Trainers section could go here */}
               </div>
             </div>
           </div>

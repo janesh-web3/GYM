@@ -82,12 +82,35 @@ export const toggleFeaturedStatus = async (gymId: string, isFeatured: boolean) =
   return response.data;
 };
 
-// Get all gyms (needed for LandingPage)
+// Get all gyms (needed for owner dashboard)
 export const getAllGyms = async (status = '') => {
   const response = await axios.get(`${API_URL}`, {
-    params: { status }
+    params: { status },
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+    }
   });
-  return { data: response.data };
+  return response.data;
+};
+
+// Get gym members (requires gym owner authentication)
+export const getGymMembers = async (
+  gymId: string,
+  page = 1,
+  limit = 20,
+  status?: string
+) => {
+  const params: Record<string, string | number> = { page, limit };
+  if (status) params.status = status;
+  
+  const response = await axios.get(`${API_URL}/${gymId}/members`, {
+    params,
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+    }
+  });
+  
+  return response.data;
 };
 
 // Get a gym's branches

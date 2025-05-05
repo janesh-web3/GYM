@@ -24,6 +24,30 @@ export const joinBranch = async (branchId: string, subscriptionId?: string): Pro
   return response.data.membership;
 };
 
+// Subscribe to a branch with payment
+export const subscribeToBranch = async (
+  branchId: string, 
+  subscriptionId: string, 
+  paymentMethodId?: string,
+  autoRenew?: boolean
+): Promise<{membership: BranchMembership, paymentIntent?: any}> => {
+  const response = await axios.post(
+    `${API_URL}/${branchId}/subscribe`,
+    { 
+      subscriptionId,
+      paymentMethodId,
+      autoRenew 
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+      }
+    }
+  );
+  return response.data;
+};
+
 // Upload media to a branch
 export const uploadBranchMedia = async (
   branchId: string,
@@ -114,6 +138,25 @@ export const getBranchMembers = async (
       Authorization: `Bearer ${localStorage.getItem('accessToken')}`
     }
   });
+  
+  return response.data;
+};
+
+// Activate a member (for gym owners)
+export const activateMember = async (memberId: string): Promise<{
+  success: boolean;
+  data: BranchMembership;
+  message: string;
+}> => {
+  const response = await axios.patch(
+    `${API_URL}/members/${memberId}/activate`,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+      }
+    }
+  );
   
   return response.data;
 };

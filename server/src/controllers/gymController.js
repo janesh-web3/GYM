@@ -1,7 +1,9 @@
 import Gym from '../models/Gym.js';
 import GymMembership from '../models/GymMembership.js';
-import { uploadMedia, deleteMedia } from '../utils/cloudinary.js';
+import { uploadMedia as uploadToCloudinary, deleteMedia as deleteCloudinaryMedia } from '../utils/cloudinary.js';
 import fs from 'fs';
+import Branch from '../models/Branch.js';
+import mongoose from 'mongoose';
 
 // @desc    Create new gym
 // @route   POST /api/gyms
@@ -186,7 +188,7 @@ export const uploadPhotos = async (req, res) => {
     }
 
     const uploadPromises = req.files.map(async (file) => {
-      const result = await uploadMedia(file, 'photos');
+      const result = await uploadToCloudinary(file, 'photos');
       return {
         url: result.url,
         public_id: result.public_id,
@@ -221,7 +223,7 @@ export const uploadVideos = async (req, res) => {
     }
 
     const uploadPromises = req.files.map(async (file) => {
-      const result = await uploadMedia(file, 'videos');
+      const result = await uploadToCloudinary(file, 'videos');
       return {
         url: result.url,
         public_id: result.public_id,
@@ -239,41 +241,71 @@ export const uploadVideos = async (req, res) => {
   }
 };
 
-// @desc    Delete gym media
+// @desc    Delete gym media (photos/videos)
 // @route   DELETE /api/gyms/:id/media/:mediaId
 // @access  Private (GymOwner - only their own gym)
-export const deleteGymMedia = async (req, res) => {
+export const deleteMedia = async (req, res) => {
   try {
-    const gym = await Gym.findById(req.params.id);
+    const { id, mediaId } = req.params;
+    const gym = await Gym.findById(id);
 
     if (!gym) {
-      return res.status(404).json({ message: 'Gym not found' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gym not found' 
+      });
     }
 
     // Check ownership
     if (gym.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to update this gym' });
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to delete media from this gym' 
+      });
     }
 
-    const mediaId = req.params.mediaId;
-    let media = gym.photos.find(p => p._id.toString() === mediaId) ||
-                gym.videos.find(v => v._id.toString() === mediaId);
-
-    if (!media) {
-      return res.status(404).json({ message: 'Media not found' });
+    // Find the media item - could be in photos or videos
+    let mediaType = 'photo';
+    let mediaItem = gym.photos.find(p => p._id.toString() === mediaId);
+    
+    if (!mediaItem) {
+      mediaItem = gym.videos.find(v => v._id.toString() === mediaId);
+      if (mediaItem) {
+        mediaType = 'video';
+      }
     }
 
-    // Delete from Cloudinary
-    await deleteMedia(media.public_id);
+    if (!mediaItem) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Media not found' 
+      });
+    }
 
-    // Remove from gym document
-    gym.photos = gym.photos.filter(p => p._id.toString() !== mediaId);
-    gym.videos = gym.videos.filter(v => v._id.toString() !== mediaId);
+    // Delete from Cloudinary if public_id exists
+    if (mediaItem.public_id) {
+      await deleteCloudinaryMedia(mediaItem.public_id, mediaType === 'video');
+    }
+
+    // Remove from the gym document
+    if (mediaType === 'photo') {
+      gym.photos = gym.photos.filter(p => p._id.toString() !== mediaId);
+    } else {
+      gym.videos = gym.videos.filter(v => v._id.toString() !== mediaId);
+    }
+    
     await gym.save();
 
-    res.json({ message: 'Media deleted successfully' });
+    res.status(200).json({ 
+      success: true, 
+      message: `${mediaType} deleted successfully` 
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error deleting media:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error deleting media' 
+    });
   }
 };
 
@@ -350,11 +382,11 @@ export const uploadLogo = async (req, res) => {
 
     // If gym already has a logo, delete the old one from Cloudinary
     if (gym.logo && gym.logo.public_id) {
-      await deleteMedia(gym.logo.public_id);
+      await deleteCloudinaryMedia(gym.logo.public_id);
     }
 
     // Upload the new logo to Cloudinary
-    const result = await uploadMedia(req.file.path, 'gym-logos');
+    const result = await uploadToCloudinary(req.file.path, 'gym-logos');
 
     // Update the gym with the new logo
     gym.logo = {
@@ -377,102 +409,6 @@ export const uploadLogo = async (req, res) => {
     });
   } catch (error) {
     res.status(400).json({ message: error.message });
-  }
-};
-
-// @desc    Upload media for gym (photos/videos)
-// @route   POST /api/gyms/:id/media/upload
-// @access  Private (GymOwner - only their own gym)
-export const uploadGymMedia = async (req, res) => {
-  try {
-    const gym = await Gym.findById(req.params.id);
-
-    if (!gym) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Gym not found' 
-      });
-    }
-
-    // Check ownership
-    if (gym.ownerId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized to update this gym' 
-      });
-    }
-
-    // Files are already uploaded to Cloudinary by the middleware
-    // and available as req.file or req.files
-    if (!req.files && !req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No files uploaded' 
-      });
-    }
-
-    // Handle both single file and multiple files
-    const files = req.files || [req.file];
-    const type = req.body.type || req.fileType || 'photo';
-    const isVideo = type === 'video';
-    
-    const uploadResults = [];
-    
-    // Process each file
-    for (const file of files) {
-      // Create media object from Cloudinary response
-      let mediaObj = {
-        url: file.path, // Cloudinary URL is in path
-        public_id: file.filename, // Cloudinary public_id is in filename
-        caption: req.body.caption || file.originalname || ''
-      };
-      
-      // Save to appropriate array in gym document
-      if (type === 'logo') {
-        // If gym already has a logo, delete the old one if we have the public_id
-        if (gym.logo && gym.logo.public_id) {
-          try {
-            await deleteMedia(gym.logo.public_id);
-          } catch (err) {
-            console.error('Error deleting old logo:', err);
-            // Continue even if delete fails
-          }
-        }
-        
-        gym.logo = mediaObj;
-        uploadResults.push({
-          ...mediaObj,
-          type: 'logo'
-        });
-      } else if (isVideo) {
-        const newVideo = mediaObj;
-        gym.videos.push(newVideo);
-        uploadResults.push({
-          ...newVideo,
-          type: 'video'
-        });
-      } else {
-        const newPhoto = mediaObj;
-        gym.photos.push(newPhoto);
-        uploadResults.push({
-          ...newPhoto,
-          type: 'photo'
-        });
-      }
-    }
-
-    await gym.save();
-
-    res.status(200).json({ 
-      success: true, 
-      data: uploadResults
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Error uploading media' 
-    });
   }
 };
 
@@ -668,6 +604,561 @@ export const getFeaturedGyms = async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: error.message || 'Error fetching featured gyms' 
+    });
+  }
+};
+
+// @desc    Get a single gym with branches
+// @route   GET /api/gyms/:id
+// @access  Public
+export const getGymWithBranches = async (req, res) => {
+  try {
+    const gym = await Gym.findById(req.params.id);
+    
+    if (!gym) {
+      return res.status(404).json({ message: "Gym not found" });
+    }
+
+    // Find all associated branches with basic details
+    const branches = await Branch.find({ gymId: gym._id })
+      .select('branchName address description photos videos memberCount status')
+      .lean();
+
+    // Add branches data to the gym object
+    const gymWithBranches = {
+      ...gym.toObject(),
+      branches: branches.map(branch => ({
+        ...branch,
+        // Add a thumbnail from the first photo if available
+        thumbnail: branch.photos && branch.photos.length > 0 
+          ? branch.photos[0].url 
+          : null
+      }))
+    };
+
+    res.json(gymWithBranches);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Approve a gym (change status to active)
+// @route   PATCH /api/gyms/:id/approve
+// @access  Private (SuperAdmin only)
+export const approveGym = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const gym = await Gym.findById(id);
+    
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Gym not found' 
+      });
+    }
+
+    // Update approval status
+    gym.status = 'active';
+    gym.isApproved = true;
+    await gym.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Gym has been approved successfully',
+      gym: {
+        _id: gym._id,
+        gymName: gym.gymName,
+        status: gym.status,
+        isApproved: gym.isApproved
+      }
+    });
+  } catch (error) {
+    console.error('Error approving gym:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || 'Error approving gym' 
+    });
+  }
+};
+
+// @desc    Get all branches for a specific gym
+// @route   GET /api/gyms/:gymId/branches
+// @access  Public
+export const getGymBranches = async (req, res) => {
+  try {
+    const { gymId } = req.params;
+    
+    // Verify gym exists
+    const gym = await Gym.findById(gymId);
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Gym not found" 
+      });
+    }
+
+    // Find all branches for this gym
+    const branches = await Branch.find({ gymId })
+      .select('branchName address status photos description memberCount')
+      .sort('branchName');
+    
+    res.status(200).json({
+      success: true,
+      count: branches.length,
+      data: branches
+    });
+  } catch (error) {
+    console.error('Error fetching gym branches:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || 'Error fetching branches' 
+    });
+  }
+};
+
+// @desc    Update media caption
+// @route   PATCH /api/gyms/:id/media/:mediaId
+// @access  Private (GymOwner - only their own gym)
+export const updateMediaCaption = async (req, res) => {
+  try {
+    const { id, mediaId } = req.params;
+    const { caption } = req.body;
+    
+    if (!caption) {
+      return res.status(400).json({
+        success: false,
+        message: 'Caption is required'
+      });
+    }
+
+    const gym = await Gym.findById(id);
+
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gym not found' 
+      });
+    }
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to update media for this gym' 
+      });
+    }
+
+    // Find and update the media item
+    let mediaUpdated = false;
+    
+    // Check photos
+    for (let i = 0; i < gym.photos.length; i++) {
+      if (gym.photos[i]._id.toString() === mediaId) {
+        gym.photos[i].caption = caption;
+        mediaUpdated = true;
+        break;
+      }
+    }
+    
+    // Check videos if not found in photos
+    if (!mediaUpdated) {
+      for (let i = 0; i < gym.videos.length; i++) {
+        if (gym.videos[i]._id.toString() === mediaId) {
+          gym.videos[i].caption = caption;
+          mediaUpdated = true;
+          break;
+        }
+      }
+    }
+
+    if (!mediaUpdated) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Media not found' 
+      });
+    }
+    
+    await gym.save();
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Caption updated successfully' 
+    });
+  } catch (error) {
+    console.error('Error updating caption:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error updating caption' 
+    });
+  }
+};
+
+// @desc    Get all members for a specific gym (including branch members)
+// @route   GET /api/gyms/:id/members
+// @access  Private (GymOwner)
+export const getGymMembers = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      status, 
+      branchId, 
+      search,
+      page = 1, 
+      limit = 20
+    } = req.query;
+    
+    // Verify gym exists and user has access
+    const gym = await Gym.findById(id);
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gym not found' 
+      });
+    }
+
+    // Check authorization - only gym owner can see members
+    if (gym.ownerId.toString() !== req.user._id.toString() && req.user.role !== 'superadmin') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Not authorized to view gym members' 
+      });
+    }
+
+    // Get all branches for this gym
+    const branches = await Branch.find({ gymId: id }, '_id branchName address');
+    
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Build query for gym members
+    const gymMemberQuery = { gymId: id };
+    if (status) {
+      gymMemberQuery.status = status;
+    }
+
+    // Build query for branch members
+    const branchMemberQuery = { 
+      gymId: id 
+    };
+    
+    if (status) {
+      branchMemberQuery.status = status;
+    }
+    
+    if (branchId) {
+      branchMemberQuery.branchId = branchId;
+    }
+
+    // Get gym members (direct members without branch)
+    const gymMembers = await GymMembership.find(gymMemberQuery)
+      .populate({
+        path: 'userId',
+        select: 'name email profileImage',
+        match: search ? { 
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } }
+          ] 
+        } : {}
+      })
+      .sort('-joinDate')
+      .lean();
+
+    // Filter out members where userId didn't match search (if search was provided)
+    const filteredGymMembers = search 
+      ? gymMembers.filter(member => member.userId) 
+      : gymMembers;
+
+    // Map gym members to a consistent format
+    const formattedGymMembers = filteredGymMembers.map(member => ({
+      _id: member._id,
+      userId: member.userId,
+      status: member.status,
+      joinDate: member.joinDate,
+      type: 'gym', // To distinguish between gym and branch members
+      subscriptionId: member.subscriptionId,
+      branch: null // Direct gym members don't have a branch
+    }));
+
+    // Get branch members
+    const BranchMembership = mongoose.model('BranchMembership');
+    const branchMembers = await BranchMembership.find(branchMemberQuery)
+      .populate({
+        path: 'userId',
+        select: 'name email profileImage',
+        match: search ? { 
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } }
+          ] 
+        } : {}
+      })
+      .populate('branchId', 'branchName address')
+      .sort('-joinDate')
+      .lean();
+
+    // Filter out members where userId didn't match search (if search was provided)
+    const filteredBranchMembers = search 
+      ? branchMembers.filter(member => member.userId) 
+      : branchMembers;
+
+    // Map branch members to a consistent format
+    const formattedBranchMembers = filteredBranchMembers.map(member => ({
+      _id: member._id,
+      userId: member.userId,
+      status: member.status,
+      joinDate: member.joinDate,
+      type: 'branch',
+      subscriptionId: member.subscriptionId,
+      branch: member.branchId
+    }));
+
+    // Combine and sort all members by join date (most recent first)
+    let allMembers = [...formattedGymMembers, ...formattedBranchMembers]
+      .sort((a, b) => new Date(b.joinDate) - new Date(a.joinDate));
+
+    // Calculate total for pagination
+    const total = allMembers.length;
+
+    // Apply pagination to the combined results
+    const paginatedMembers = allMembers.slice(skip, skip + parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      count: total,
+      branches, // Include branches for filtering in frontend
+      memberships: paginatedMembers,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching gym members:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error fetching members' 
+    });
+  }
+};
+
+// @desc    Upload media for gym (photos/videos)
+// @route   POST /api/gyms/:id/media/upload
+// @access  Private (GymOwner - only their own gym)
+export const uploadMedia = async (req, res) => {
+  try {
+    const gym = await Gym.findById(req.params.id);
+
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Gym not found' 
+      });
+    }
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Not authorized to upload media to this gym' 
+      });
+    }
+
+    // Files are already uploaded to Cloudinary by the middleware
+    if (!req.files && !req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No files uploaded' 
+      });
+    }
+
+    // Handle both single file and multiple files
+    const files = req.files || [req.file];
+    const type = req.query.type || req.body.type || 'photo';
+    const isVideo = type === 'video';
+    
+    const uploadResults = [];
+    
+    // Process each file
+    for (const file of files) {
+      // Create media object from Cloudinary response
+      let mediaObj = {
+        url: file.path, // Cloudinary URL is in path
+        public_id: file.filename, // Cloudinary public_id is in filename
+        caption: req.body.caption || file.originalname || ''
+      };
+      
+      // Save to appropriate array in gym document
+      if (isVideo) {
+        const newVideo = mediaObj;
+        gym.videos.push(newVideo);
+        uploadResults.push({
+          ...newVideo,
+          type: 'video'
+        });
+      } else {
+        const newPhoto = mediaObj;
+        gym.photos.push(newPhoto);
+        uploadResults.push({
+          ...newPhoto,
+          type: 'photo'
+        });
+      }
+    }
+
+    await gym.save();
+
+    res.status(200).json({ 
+      success: true, 
+      data: uploadResults
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error uploading media' 
+    });
+  }
+};
+
+// @desc    Activate a pending gym member
+// @route   PATCH /api/gyms/members/:memberId/activate
+// @access  Private (GymOwner)
+export const activateMember = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+
+    // Find the membership
+    const membership = await GymMembership.findById(memberId);
+    if (!membership) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Membership not found" 
+      });
+    }
+
+    // Get the associated gym
+    const gym = await Gym.findById(membership.gymId);
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Gym not found" 
+      });
+    }
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized to activate members for this gym" 
+      });
+    }
+
+    // Check if already active
+    if (membership.status === "active") {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Member is already active" 
+      });
+    }
+
+    // Activate the membership
+    membership.status = "active";
+    await membership.save();
+
+    // Update gym member count if needed
+    if (membership.status === "pending") {
+      gym.totalMembers = (gym.totalMembers || 0) + 1;
+      await gym.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      data: membership,
+      message: "Member activated successfully"
+    });
+  } catch (error) {
+    console.error('Error activating gym member:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error activating member' 
+    });
+  }
+};
+
+// @desc    Update a gym member's status
+// @route   PATCH /api/gyms/members/:memberId/status
+// @access  Private (GymOwner)
+export const updateMemberStatus = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    if (!['active', 'inactive', 'pending', 'suspended'].includes(status)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid status. Status must be active, inactive, pending, or suspended" 
+      });
+    }
+
+    // Find the membership
+    const membership = await GymMembership.findById(memberId);
+    if (!membership) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Membership not found" 
+      });
+    }
+
+    // Get the associated gym
+    const gym = await Gym.findById(membership.gymId);
+    if (!gym) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Gym not found" 
+      });
+    }
+
+    // Check ownership
+    if (gym.ownerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized to update members for this gym" 
+      });
+    }
+
+    // Get the previous status to handle count updates
+    const previousStatus = membership.status;
+
+    // Update the membership status
+    membership.status = status;
+    await membership.save();
+
+    // Update gym member count if needed
+    if (previousStatus !== 'active' && status === 'active') {
+      // Member became active, increment count
+      gym.totalMembers = (gym.totalMembers || 0) + 1;
+      await gym.save();
+    } else if (previousStatus === 'active' && status !== 'active') {
+      // Member became inactive, decrement count
+      gym.totalMembers = Math.max(0, (gym.totalMembers || 1) - 1);
+      await gym.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      data: membership,
+      message: `Member status updated to ${status} successfully`
+    });
+  } catch (error) {
+    console.error('Error updating gym member status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error updating member status' 
     });
   }
 }; 

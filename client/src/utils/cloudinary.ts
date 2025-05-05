@@ -18,6 +18,11 @@ export const uploadToCloudinary = async (
   entityType: 'gym' | 'branch' = 'gym'
 ): Promise<{ url: string; public_id: string }> => {
   try {
+    // Validate inputs
+    if (!file) throw new Error('No file provided');
+    if (!entityId) throw new Error('No entity ID provided');
+    if (!type) throw new Error('No media type specified');
+    
     // Create form data
     const formData = new FormData();
     formData.append('files', file);
@@ -26,7 +31,7 @@ export const uploadToCloudinary = async (
     // Define the endpoint based on the entity type
     const endpoint = entityType === 'gym' 
       ? `/api/gyms/${entityId}/media/upload?type=${type}` 
-      : `/api/branches/${entityId}/media/upload?type=${type}`;
+      : `/api/branches/${entityId}/media?type=${type}`;
 
     // Get auth token
     const token = getAuthToken();
@@ -53,6 +58,20 @@ export const uploadToCloudinary = async (
     }
 
     const result = await response.json();
+    
+    // Handle different response structures between gym and branch endpoints
+    if (entityType === 'branch') {
+      const mediaArray = type === 'video' ? result.videos : result.photos;
+      if (mediaArray && mediaArray.length > 0) {
+        const latestMedia = mediaArray[mediaArray.length - 1];
+        return {
+          url: latestMedia.url,
+          public_id: latestMedia.public_id
+        };
+      }
+      throw new Error('No media found in response');
+    }
+    
     return result.data[0] || result.data; // Return the first result or the entire data if single item
   } catch (error) {
     console.error('Error uploading to Cloudinary:', error);
@@ -85,6 +104,10 @@ export const uploadMultipleToCloudinary = async (
     if (!files || files.length === 0) {
       throw new Error('No files provided for upload');
     }
+    
+    if (!entityId) {
+      throw new Error('No entity ID provided');
+    }
 
     // Create form data
     const formData = new FormData();
@@ -99,7 +122,7 @@ export const uploadMultipleToCloudinary = async (
     // Define the endpoint based on the entity type
     const endpoint = entityType === 'gym' 
       ? `/api/gyms/${entityId}/media/upload?type=${type}` 
-      : `/api/branches/${entityId}/media/upload?type=${type}`;
+      : `/api/branches/${entityId}/media?type=${type}`;
 
     // Get auth token
     const token = getAuthToken();
@@ -126,6 +149,28 @@ export const uploadMultipleToCloudinary = async (
     }
 
     const result = await response.json();
+    
+    // Handle different response structures between gym and branch endpoints
+    if (entityType === 'branch') {
+      // For branches, we get the full branch object back with photos/videos arrays
+      const mediaArray = type === 'video' ? result.videos : result.photos;
+      if (!mediaArray || mediaArray.length === 0) {
+        throw new Error(`No ${type}s found in response`);
+      }
+      
+      // Get the most recently added media items (equal to the number of files we uploaded)
+      const startIndex = Math.max(0, mediaArray.length - files.length);
+      const uploadedMedia = mediaArray.slice(startIndex);
+      
+      return uploadedMedia.map((item: any) => ({
+        _id: item._id || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        type: type,
+        url: item.url,
+        public_id: item.public_id,
+        caption: item.caption || ''
+      }));
+    }
+    
     if (!result.success) {
       throw new Error(result.message || `Failed to upload ${type}s`);
     }
